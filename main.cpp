@@ -30,8 +30,8 @@
 #include <fstream>
 #endif /* FILE_LOGGER */
 
-/* Build v.0.0.1 from 06.04.2021 */
-const uint32_t PATCH = 1;
+/* Build v.0.0.2 from 06.04.2021 */
+const uint32_t PATCH = 2;
 const uint32_t MINOR = 0;
 const uint32_t MAJOR = 0;
 
@@ -84,9 +84,7 @@ private:
 
 public:
 
-    /* constructor */
     file_logger() {
-
 #if FILE_LOGGER
         using namespace boost::posix_time;
         using namespace boost::gregorian;
@@ -99,7 +97,6 @@ public:
 #endif /* FILE_LOGGER */
     }
 
-    /* destructor */
     ~file_logger() {
         close();
     }
@@ -549,8 +546,7 @@ private:
         }
     }
 
-    bool verify_certificate(bool preverified,
-        boost::asio::ssl::verify_context& ctx)
+    bool verify_certificate(bool preverified, boost::asio::ssl::verify_context& ctx)
     {
         // The verify callback can be used to check whether the certificate that is
         // being presented is valid for the peer. For example, RFC 2818 describes
@@ -585,11 +581,7 @@ private:
     {
         if (!error)
         {
-            /*boost::asio::async_write(socket_,
-                boost::asio::buffer(buf, request_length),
-                boost::bind(&SecureTcpConnection::handle_write, this,
-                    boost::asio::placeholders::error,
-                    boost::asio::placeholders::bytes_transferred));*/
+            start_init();
         }
         else
         {
@@ -638,16 +630,13 @@ public:
 
 
             logger.write(boost::str(boost::format("Start connecting to %1%:%2% \n") % host % port));
-            endpoints = resolver_.resolve(boost::asio::ip::tcp::v4(), "www.google.com", "443");
-            //boost::asio::ip::tcp::endpoint ep = boost::asio::connect(socket_.lowest_layer(), endpoints);
+            endpoints = resolver_.resolve(boost::asio::ip::tcp::v4(), host, port);
            
             boost::asio::async_connect(socket_.lowest_layer(), endpoints,
                 boost::bind(&SecureTcpConnection::handle_connect, this,
                     boost::asio::placeholders::error));
 
-            /*randGen = std::make_unique<RandomGen>();
-
-            start_init();*/
+            randGen = std::make_unique<RandomGen>();
         }
         catch (std::exception& ex) {
             std::cerr << "Connection failed: " << ex.what() << "\n";

@@ -1,6 +1,8 @@
 /.vs/
 /x64/
 
+*.ini
+
 *.key
 *.crt
 *.csr
