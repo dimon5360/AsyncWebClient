@@ -35,7 +35,7 @@ const uint32_t PATCH = 2;
 const uint32_t MINOR = 0;
 const uint32_t MAJOR = 0;
 
-class file_logger {
+class FileLogger {
 
 private:
 
@@ -51,7 +51,7 @@ private:
 #endif /* FILE_LOGGER */
 
     /* open log file */
-    int open() noexcept {
+    int Open() noexcept {
 #if FILE_LOGGER
         log_file.open(filename.str());
         if (!log_file.is_open())
@@ -59,13 +59,13 @@ private:
             std::cout << "Log file opening is failed\n\n";
             return 1;
         }
-        write(boost::str(boost::format("Log file \'%1%\' is opened.\n") % filename.str()));
+        Write(boost::str(boost::format("Log file \'%1%\' is opened.\n") % filename.str()));
 #endif /* FILE_LOGGER */
         return 0;
     }
 
     /* close log file */
-    void close() noexcept {
+    void Close() noexcept {
 #if FILE_LOGGER
         std::lock_guard<std::mutex> lk(this->_m);
         if (log_file.is_open()) {
@@ -84,25 +84,25 @@ private:
 
 public:
 
-    file_logger() {
+    FileLogger() {
 #if FILE_LOGGER
         using namespace boost::posix_time;
         using namespace boost::gregorian;
 
         ptime now = second_clock::local_time();
         filename << "web_client_log " << GetCurrTimeMs() << ".log";
-        open();
+        Open();
 
-        write(boost::str(boost::format("Start time \'%1%\' is opened.\n") % to_simple_string(now)));
+        Write(boost::str(boost::format("Start time \'%1%\' is opened.\n") % to_simple_string(now)));
 #endif /* FILE_LOGGER */
     }
 
-    ~file_logger() {
-        close();
+    ~FileLogger() {
+        Close();
     }
 
     /* write log string */
-    void write(std::string log) noexcept {
+    void Write(std::string log) noexcept {
         using namespace boost::posix_time;
         using namespace boost::gregorian;
 
@@ -118,7 +118,7 @@ public:
     }
 };
 
-static file_logger logger;
+FileLogger logger;
 
 class RandomGen {
 private:
@@ -128,15 +128,6 @@ private:
     const int MIN = 0, MAX = 8192;//1023; // TODO: max value is enough small
 
 public:
-
-    /* constructor */
-    RandomGen() {
-    }
-
-    /* destructor */
-    ~RandomGen() {
-        /* ... */
-    }
 
     /* getter for new random number to send in server */
     uint32_t GenRandomNumber() {
@@ -160,7 +151,7 @@ private:
      */
     void close(const boost::system::error_code& error) {
         shutdown(boost::asio::ip::tcp::socket::shutdown_send, error.value());
-        logger.write(boost::str(boost::format("Close connection error: %2% \n") % id_ % error.message()));
+        logger.Write(boost::str(boost::format("Close connection error: %2% \n") % id_ % error.message()));
     }
 
     void to_lower(std::string& str) {
@@ -176,7 +167,7 @@ private:
         /* hello message to the server */
         std::string msg = "hello server";
 
-        logger.write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
+        logger.Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
 
         boost::asio::async_write(socket_, boost::asio::buffer(msg),
             boost::bind(&TcpConnection::handle_init, this,
@@ -223,7 +214,7 @@ private:
 
             std::string in_auth_msg{ buf.data(), bytes_transferred };
 
-            logger.write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_auth_msg % bytes_transferred));
+            logger.Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_auth_msg % bytes_transferred));
 
             /* support of different register */
             to_lower(in_auth_msg);
@@ -265,7 +256,7 @@ private:
 
             std::string in_msg{ buf.data(), bytes_transferred };
 
-            logger.write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
+            logger.Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
 
             /* support of different register */
             to_lower(in_msg);
@@ -295,7 +286,7 @@ private:
         std::stringstream msg;
         msg << tech_resp_msg << randGen->GenRandomNumber();
 
-        logger.write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg.str() % msg.str().size()));
+        logger.Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg.str() % msg.str().size()));
 
         boost::asio::async_write(socket_, boost::asio::buffer(msg.str()),
             boost::bind(&TcpConnection::handle_write, this,
@@ -350,7 +341,7 @@ public:
         resolver_(io_context)
     { 
         try {
-            logger.write(boost::str(boost::format("Start connecting to %1%:%2% \n") % host % port));
+            logger.Write(boost::str(boost::format("Start connecting to %1%:%2% \n") % host % port));
             endpoints = resolver_.resolve(boost::asio::ip::tcp::v4(), "localhost", "4059");
             boost::asio::ip::tcp::endpoint ep = boost::asio::connect(socket_, endpoints);
 
@@ -365,7 +356,7 @@ public:
 
     /* destructor */
     virtual ~TcpConnection() {
-        logger.write("Close connection\n");
+        logger.Write("Close connection\n");
         socket_.close();
         /* ... */
     }
@@ -388,7 +379,7 @@ private:
      */
     void close(const boost::system::error_code& error) {
         shutdown(boost::asio::ip::tcp::socket::shutdown_send, error.value());
-        logger.write(boost::str(boost::format("Close connection error: %2% \n") % id_ % error.message()));
+        logger.Write(boost::str(boost::format("Close connection error: %2% \n") % id_ % error.message()));
     }
 
     void to_lower(std::string& str) {
@@ -404,7 +395,7 @@ private:
         /* hello message to the server */
         std::string msg = "hello server";
 
-        logger.write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
+        logger.Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
 
         boost::asio::async_write(socket_, boost::asio::buffer(msg),
             boost::bind(&SecureTcpConnection::handle_init, this,
@@ -415,7 +406,7 @@ private:
      *  @brief  Callback-handler of async initialization process
      *  @param  error Boost system error object reference
      *  @return None
-     */
+     */ 
     void handle_init(const boost::system::error_code& error)
     {
         if (!error) {
@@ -451,7 +442,7 @@ private:
 
             std::string in_auth_msg{ buf.data(), bytes_transferred };
 
-            logger.write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_auth_msg % bytes_transferred));
+            logger.Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_auth_msg % bytes_transferred));
 
             /* support of different register */
             to_lower(in_auth_msg);
@@ -493,7 +484,7 @@ private:
 
             std::string in_msg{ buf.data(), bytes_transferred };
 
-            logger.write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
+            logger.Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
 
             /* support of different register */
             to_lower(in_msg);
@@ -524,7 +515,7 @@ private:
         std::stringstream msg;
         msg << tech_resp_msg << randGen->GenRandomNumber();
 
-        logger.write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg.str() % msg.str().size()));
+        logger.Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg.str() % msg.str().size()));
 
         boost::asio::async_write(socket_, boost::asio::buffer(msg.str()),
             boost::bind(&SecureTcpConnection::handle_write, this,
@@ -629,7 +620,7 @@ public:
                 boost::placeholders::_1, boost::placeholders::_2));
 
 
-            logger.write(boost::str(boost::format("Start connecting to %1%:%2% \n") % host % port));
+            logger.Write(boost::str(boost::format("Start connecting to %1%:%2% \n") % host % port));
             endpoints = resolver_.resolve(boost::asio::ip::tcp::v4(), host, port);
            
             boost::asio::async_connect(socket_.lowest_layer(), endpoints,
@@ -663,7 +654,7 @@ int main() {
     /* for corrent output boost error messages */
     SetConsoleOutputCP(1251);
     std::cout << boost::format("Hello. Application version is %1%.%2%.%3%\n") % MAJOR % MINOR % PATCH;
-    logger.write("Press ESC to exit...\n");
+    logger.Write("Press ESC to exit...\n");
     try
     {
         /* separate thread to monitor SPACE key pressing */
@@ -678,7 +669,7 @@ int main() {
         TcpConnection conn(io_context);
 #endif /* SECURE_CONNECTION */
         io_context.run();
-        ext.join();
+        ext.detach();
     }
     catch (std::exception &ex)
     {
