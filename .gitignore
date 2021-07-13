@@ -1,2 +1,10 @@
 /.vs/
 /x64/
+
+*.key
+*.crt
+*.csr
+*.pem
+*.srl
+
+*.log
