@@ -14,6 +14,8 @@
 #include <random>
 #include <cmath>
 
+#include <spdlog/spdlog.h>
+
 /* boost C++ lib headers */
 #include <boost/asio.hpp>
 #include <boost/array.hpp>
@@ -21,17 +23,19 @@
 #include <boost/bind/placeholders.hpp>
 #include <boost/format.hpp>
 
+#include <boost/lexical_cast.hpp>
+
 /* deployment definitions */
 #define CONSOLE_LOGGER      1
-#define FILE_LOGGER         1
+#define FILE_LOGGER         0
 
 #if FILE_LOGGER
 #include <boost/date_time.hpp>
 #include <fstream>
 #endif /* FILE_LOGGER */
 
-/* Build v.0.0.2 from 06.04.2021 */
-const uint32_t PATCH = 2;
+/* Build v.0.0.3 from 14.07.2021 */
+const uint32_t PATCH = 3;
 const uint32_t MINOR = 0;
 const uint32_t MAJOR = 0;
 
@@ -39,39 +43,13 @@ class FileLogger {
 
 private:
 
-#if FILE_LOGGER
-
-    /* file output stream object */
-    std::ofstream log_file;
-    /* dump file name */
-    std::stringstream filename;
-    /* mutex object to avoid data race */
-    std::mutex _m;
-
-#endif /* FILE_LOGGER */
-
     /* open log file */
     int Open() noexcept {
-#if FILE_LOGGER
-        log_file.open(filename.str());
-        if (!log_file.is_open())
-        {
-            std::cout << "Log file opening is failed\n\n";
-            return 1;
-        }
-        Write(boost::str(boost::format("Log file \'%1%\' is opened.\n") % filename.str()));
-#endif /* FILE_LOGGER */
         return 0;
     }
 
     /* close log file */
     void Close() noexcept {
-#if FILE_LOGGER
-        std::lock_guard<std::mutex> lk(this->_m);
-        if (log_file.is_open()) {
-            log_file.close();
-        }
-#endif /* FILE_LOGGER */
     }
 
     /* get time code */
@@ -85,16 +63,6 @@ private:
 public:
 
     FileLogger() {
-#if FILE_LOGGER
-        using namespace boost::posix_time;
-        using namespace boost::gregorian;
-
-        ptime now = second_clock::local_time();
-        filename << "web_client_log " << GetCurrTimeMs() << ".log";
-        Open();
-
-        Write(boost::str(boost::format("Start time \'%1%\' is opened.\n") % to_simple_string(now)));
-#endif /* FILE_LOGGER */
     }
 
     ~FileLogger() {
@@ -102,19 +70,8 @@ public:
     }
 
     /* write log string */
-    void Write(std::string log) noexcept {
-        using namespace boost::posix_time;
-        using namespace boost::gregorian;
-
-        ptime now = second_clock::local_time();
-        std::string time = boost::str(boost::format("%1%: ") % to_simple_string(now));
-#if CONSOLE_LOGGER
-        std::cout << time << log;
-#endif /* CONSOLE_LOGGER */
-#if FILE_LOGGER
-        std::lock_guard<std::mutex> lk(this->_m);
-        log_file << time << log;
-#endif /* FILE_LOGGER */
+    void Write(std::string &&log) noexcept {
+        spdlog::info(log);
     }
 };
 
@@ -125,7 +82,7 @@ private:
     /* random number generator object */
     std::random_device r;
     /* borders of random numbers */
-    const int MIN = 0, MAX = 8192;//1023; // TODO: max value is enough small
+    const int MIN = 0, MAX = 16384;// 8192;//1023; // TODO: max value is enough small
 
 public:
 
@@ -139,248 +96,21 @@ public:
     }
 };
 
-class TcpConnection
-{
-
-private:
-
-    /***********************************************************************************
-     *  @brief  Close connection and call the desctructor
-     *  @param  error Boost system error object reference
-     *  @return None
-     */
-    void close(const boost::system::error_code& error) {
-        shutdown(boost::asio::ip::tcp::socket::shutdown_send, error.value());
-        logger.Write(boost::str(boost::format("Close connection error: %2% \n") % id_ % error.message()));
-    }
-
-    void to_lower(std::string& str) {
-        std::transform(str.begin(), str.end(), str.begin(), ::tolower);
-    }
-
-    /***********************************************************************************
-     *  @brief  Start process initialization of client
-     *  @return None
-     */
-    void start_init()
-    {
-        /* hello message to the server */
-        std::string msg = "hello server";
-
-        logger.Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
-
-        boost::asio::async_write(socket_, boost::asio::buffer(msg),
-            boost::bind(&TcpConnection::handle_init, this,
-                boost::asio::placeholders::error));
-    }
-
-    /***********************************************************************************
-     *  @brief  Callback-handler of async initialization process
-     *  @param  error Boost system error object reference
-     *  @return None
-     */
-    void handle_init(const boost::system::error_code& error)
-    {
-        if (!error) {
-            start_auth();
-        }
-        else {
-            close(error);
-        }
-    }
-
-    /***********************************************************************************
-     *  @brief  Start process authentication of client
-     *  @return None
-     */
-    void start_auth()
-    {
-        socket_.async_read_some(boost::asio::buffer(buf),
-            boost::bind(&TcpConnection::handle_auth, this,
-                boost::asio::placeholders::error,
-                boost::asio::placeholders::bytes_transferred));
-    }
-
-    /***********************************************************************************
-     *  @brief  Callback-handler of async authentication process
-     *  @param  error Boost system error object reference
-     *  @param  recvBytes Amount of bytes received from connection
-     *  @return None
-     */
-    void handle_auth(const boost::system::error_code& error,
-        std::size_t bytes_transferred)
-    {
-        if (!error) {
-
-            std::string in_auth_msg{ buf.data(), bytes_transferred };
-
-            logger.Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_auth_msg % bytes_transferred));
-
-            /* support of different register */
-            to_lower(in_auth_msg);
-
-            /* check that auth msg corresponds to default value */
-            if (in_auth_msg.substr(0, auth_msg.size()).compare(auth_msg) == 0) {
-                id_ = in_auth_msg.substr(auth_msg.size());
-                start_write();
-            }
-        }
-        else {
-            close(error);
-        }
-    }
-
-    /***********************************************************************************
-     *  @brief  Start async reading process from socket
-     *  @param  None
-     *  @return None
-     */
-    void start_read()
-    {
-        socket_.async_read_some(boost::asio::buffer(buf),
-            boost::bind(&TcpConnection::handle_read, this,
-                boost::asio::placeholders::error,
-                boost::asio::placeholders::bytes_transferred));
-    }
-
-    /***********************************************************************************
-     *  @brief  Callback-handler of async reading process
-     *  @param  error Boost system error object reference
-     *  @param  recvBytes Amount of bytes received from connection
-     *  @return None
-     */
-    void handle_read(const boost::system::error_code& error,
-        std::size_t bytes_transferred)
-    {
-        if (!error) {
-
-            std::string in_msg{ buf.data(), bytes_transferred };
-
-            logger.Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
-
-            /* support of different register */
-            to_lower(in_msg);
-
-            /* check that auth msg corresponds to default value */
-            if (in_msg.substr(0, tech_req_msg.size()).compare(tech_req_msg) == 0) {
-                auto number = in_msg.substr(tech_req_msg.size());
-
-                std::stringstream int_conv(number);
-
-                int value;
-                int_conv >> value;
-                start_write();
-            }
-        } else {
-            close(error);
-        }
-    }
-
-    /***********************************************************************************
-     *  @brief  Start async writing process from socket
-     *  @param  None
-     *  @return None
-     */
-    void start_write()
-    {
-        std::stringstream msg;
-        msg << tech_resp_msg << randGen->GenRandomNumber();
-
-        logger.Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg.str() % msg.str().size()));
-
-        boost::asio::async_write(socket_, boost::asio::buffer(msg.str()),
-            boost::bind(&TcpConnection::handle_write, this,
-                boost::asio::placeholders::error));
-    }
-
-    /***********************************************************************************
-     *  @brief  Callback-handler of async writing process
-     *  @param  error Boost system error object reference
-     *  @return None
-     */
-    void handle_write(const boost::system::error_code& error)
-    {
-        if (!error) {
-            start_read();
-        }
-        else {
-            close(error);
-        }
-    }
-
-    /* unique pointer to random number generator */
-    std::unique_ptr<RandomGen> randGen;
-    /* cliet nboost tcp socket object */
-    boost::asio::ip::tcp::socket socket_;
-
-    boost::asio::ip::tcp::resolver resolver_;
-    boost::asio::ip::tcp::resolver::results_type endpoints;
-
-    /* msgs headers to exchange with clients */
-    const std::string auth_msg = std::string("hello user id=");
-    const std::string tech_msg_header = std::string("user id=");
-    const std::string tech_resp_msg = std::string("number=");
-    const std::string tech_req_msg = std::string("summ=");
-
-    /* unique id of client */
-    std::string id_;
-
-    /* exchange data buffer */
-    enum { max_length = 1024 };
-    boost::array<char, max_length> buf = { { 0 } };
-
-    /* parameters of host and port to connect */
-    const std::string host = "localhost";
-    const std::string port = "4059";
-
-public:
-
-    /* constructor, takes boost io_context object reference */
-    TcpConnection(boost::asio::io_context& io_context)
-        : socket_(io_context),
-        resolver_(io_context)
-    { 
-        try {
-            logger.Write(boost::str(boost::format("Start connecting to %1%:%2% \n") % host % port));
-            endpoints = resolver_.resolve(boost::asio::ip::tcp::v4(), "localhost", "4059");
-            boost::asio::ip::tcp::endpoint ep = boost::asio::connect(socket_, endpoints);
-
-            randGen = std::make_unique<RandomGen>();
-
-            start_init();
-        }
-        catch (std::exception& ex) {
-            std::cerr << "Connection failed: " << ex.what() << "\n";
-        }
-    }
-
-    /* destructor */
-    virtual ~TcpConnection() {
-        logger.Write("Close connection\n");
-        socket_.close();
-        /* ... */
-    }
-};
-
 #include <windows.h>
+
+#include <queue>
+#include <mutex>
+#include <shared_mutex>
 
 #include <openssl/ssl.h>
 #include <boost/asio/ssl.hpp>
 
 class SecureTcpConnection {
 
+    std::queue<uint64_t> msg_queue;
+    mutable std::shared_mutex mutex_;
 
 private:
-
-    /***********************************************************************************
-     *  @brief  Close connection and call the desctructor
-     *  @param  error Boost system error object reference
-     *  @return None
-     */
-    void close(const boost::system::error_code& error) {
-        shutdown(boost::asio::ip::tcp::socket::shutdown_send, error.value());
-        logger.Write(boost::str(boost::format("Close connection error: %2% \n") % id_ % error.message()));
-    }
 
     void to_lower(std::string& str) {
         std::transform(str.begin(), str.end(), str.begin(), ::tolower);
@@ -413,7 +143,7 @@ private:
             start_auth();
         }
         else {
-            close(error);
+            Shutdown();
         }
     }
 
@@ -429,6 +159,8 @@ private:
                 boost::asio::placeholders::bytes_transferred));
     }
 
+#define CHAT 1
+
     /***********************************************************************************
      *  @brief  Callback-handler of async authentication process
      *  @param  error Boost system error object reference
@@ -441,7 +173,6 @@ private:
         if (!error) {
 
             std::string in_auth_msg{ buf.data(), bytes_transferred };
-
             logger.Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_auth_msg % bytes_transferred));
 
             /* support of different register */
@@ -450,11 +181,46 @@ private:
             /* check that auth msg corresponds to default value */
             if (in_auth_msg.substr(0, auth_msg.size()).compare(auth_msg) == 0) {
                 id_ = in_auth_msg.substr(auth_msg.size());
-                start_write();
+#if CHAT
+                try {
+
+                    start_read();
+                    //start_write();
+
+                    std::thread{ [&]() {
+
+                        while (true) {
+                            std::cout << "Which user do you want to send message to?\n";
+                            std::string res;
+                            std::getline(std::cin, res);
+
+                            uint64_t dstUserId = boost::lexical_cast<uint64_t>(res);
+                            std::stringstream msg;
+
+                            msg << tech_msg_header << dstUserId << ", " << tech_resp_msg << randGen->GenRandomNumber();
+
+                            logger.Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg.str() % msg.str().size()));
+
+                            socket_.async_write_some(boost::asio::buffer(msg.str()),
+                                [&](const boost::system::error_code& error,
+                                    std::size_t bytes_transferred) {
+                                        std::cout << "Message sended\n";
+                                });
+
+                            std::this_thread::sleep_for(std::chrono::milliseconds(4));
+                        }
+                    } }.detach();
+                }
+                catch (std::exception& ex) {
+                    std::cout << ex.what();
+                }
+#else 
+                start_read();
+#endif /* CHAT */
             }
         }
         else {
-            close(error);
+            Shutdown();
         }
     }
 
@@ -482,28 +248,32 @@ private:
     {
         if (!error) {
 
-            std::string in_msg{ buf.data(), bytes_transferred };
+            std::string_view in_msg{ buf.data(), bytes_transferred };
 
             logger.Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
 
             /* support of different register */
-            to_lower(in_msg);
+            //to_lower(in_msg);
 
-            /* check that auth msg corresponds to default value */
-            if (in_msg.substr(0, tech_req_msg.size()).compare(tech_req_msg) == 0) {
-                auto number = in_msg.substr(tech_req_msg.size());
-
-                std::stringstream int_conv(number);
-
-                int value;
-                int_conv >> value;
+#if CHAT
+            start_read();
+#else 
+            if (in_msg.starts_with(tech_msg_header)) {
+                auto item = in_msg.find(tech_req_msg);
+                uint64_t value = boost::lexical_cast<uint64_t>(in_msg.substr(item + tech_req_msg.size()));
                 start_write();
             }
+#endif /* CHAT */
         }
         else {
-            close(error);
+            Shutdown();
         }
     }
+#if CHAT
+#include <chrono>
+#include <future>
+
+#endif /* CHAT */        
 
     /***********************************************************************************
      *  @brief  Start async writing process from socket
@@ -512,14 +282,30 @@ private:
      */
     void start_write()
     {
+#if CHAT
+        if (!msg_queue.empty()) {
+
+            std::stringstream msg;
+            uint64_t dstUserId = msg_queue.front();
+
+            msg << tech_msg_header << id_ << ", " << tech_resp_msg << randGen->GenRandomNumber();
+
+            logger.Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg.str() % msg.str().size()));
+
+            boost::asio::async_write(socket_, boost::asio::buffer(msg.str()),
+                boost::bind(&SecureTcpConnection::handle_write, this,
+                    boost::asio::placeholders::error));
+        }
+#else 
         std::stringstream msg;
-        msg << tech_resp_msg << randGen->GenRandomNumber();
+        msg << tech_msg_header << id_ << ", " << tech_resp_msg << randGen->GenRandomNumber();
 
         logger.Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg.str() % msg.str().size()));
 
         boost::asio::async_write(socket_, boost::asio::buffer(msg.str()),
             boost::bind(&SecureTcpConnection::handle_write, this,
                 boost::asio::placeholders::error));
+#endif /* CHAT */        
     }
 
     /***********************************************************************************
@@ -530,10 +316,14 @@ private:
     void handle_write(const boost::system::error_code& error)
     {
         if (!error) {
+#if CHAT
+            start_write();
+#else 
             start_read();
+#endif /* CHAT */
         }
         else {
-            close(error);
+            Shutdown();
         }
     }
 
@@ -608,6 +398,31 @@ private:
 
 public:
 
+
+    void Shutdown() {
+        std::cout << "Shutdown" << std::endl;
+        socket_.async_shutdown(boost::bind(&SecureTcpConnection::HandleShutdown, this, boost::asio::placeholders::error));
+        //socket_.next_layer().close();
+    }
+
+    void HandleShutdown(const boost::system::error_code& error) {
+        std::cout << "Handle of shutdown" << std::endl;
+        //socket_.shutdown();
+        close(error);
+    }
+
+
+    /***********************************************************************************
+     *  @brief  Close connection and call the desctructor
+     *  @param  error Boost system error object reference
+     *  @return None
+     */
+    void close(const boost::system::error_code& error) {
+        logger.Write(boost::str(boost::format("Close connection error: %2% \n") % id_ % error.message()));
+        
+        socket_.lowest_layer().close();
+    }
+
     SecureTcpConnection(boost::asio::io_context& io_context, boost::asio::ssl::context &ssl_context)
         : socket_(io_context, ssl_context),
         resolver_(io_context) 
@@ -662,11 +477,9 @@ int main() {
         /* start tcp client */
         boost::asio::io_context io_context;
 #if SECURE_CONNECTION
-        boost::asio::ssl::context ctx(boost::asio::ssl::context::sslv23);
+        boost::asio::ssl::context ctx(boost::asio::ssl::context::tlsv13);
         ctx.load_verify_file("rootca.crt");
         SecureTcpConnection conn(io_context, ctx);
-#else
-        TcpConnection conn(io_context);
 #endif /* SECURE_CONNECTION */
         io_context.run();
         ext.detach();
