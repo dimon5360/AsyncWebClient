@@ -7,6 +7,10 @@
 /* transform */
 #include <algorithm>
 
+#include <queue>
+#include <mutex>
+#include <shared_mutex>
+
 /* random */
 #include <iomanip>
 #include <string>
@@ -23,51 +27,18 @@
 #include <boost/bind/placeholders.hpp>
 #include <boost/format.hpp>
 
+#include <boost/asio/ssl.hpp>
+
 #include <boost/lexical_cast.hpp>
 
-/* deployment definitions */
-#define CONSOLE_LOGGER      1
-#define FILE_LOGGER         0
-
-#if FILE_LOGGER
-#include <boost/date_time.hpp>
-#include <fstream>
-#endif /* FILE_LOGGER */
-
-/* Build v.0.0.3 from 14.07.2021 */
-const uint32_t PATCH = 3;
+/* Build v.0.0.4 from 29.07.2021 */
+const uint32_t PATCH = 4;
 const uint32_t MINOR = 0;
 const uint32_t MAJOR = 0;
 
 class FileLogger {
 
-private:
-
-    /* open log file */
-    int Open() noexcept {
-        return 0;
-    }
-
-    /* close log file */
-    void Close() noexcept {
-    }
-
-    /* get time code */
-    uint64_t GetCurrTimeMs() {
-        const auto systick_now = std::chrono::system_clock::now();
-        const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(systick_now.time_since_epoch());
-        return nowMs.count();
-    }
-
-
 public:
-
-    FileLogger() {
-    }
-
-    ~FileLogger() {
-        Close();
-    }
 
     /* write log string */
     void Write(std::string &&log) noexcept {
@@ -96,17 +67,118 @@ public:
     }
 };
 
-#include <windows.h>
+#include "cryptopp/hex.h"
+#include "cryptopp/base64.h"
+#include "cryptopp/sha.h"
+#include "cryptopp/hmac.h"
+#include "cryptopp/cryptlib.h"
 
-#include <queue>
-#include <mutex>
-#include <shared_mutex>
 
-#include <openssl/ssl.h>
-#include <boost/asio/ssl.hpp>
+#include "conio.h"
+
+#include "boost/regex.hpp"
+
+class User {
+private:
+    std::string username{}, password{};
+    bool userValid = false;
+
+    const int MAX_TRY_NUM = 3;
+
+    static std::string SHA256(const std::string& msg)
+    {
+        using namespace CryptoPP;
+        CryptoPP::SHA256 hash;
+
+        const size_t ss{ msg.size() };
+        byte const* pbData = (byte*)msg.data();
+        byte abDigest[CryptoPP::SHA256::DIGESTSIZE];
+
+        hash.CalculateDigest(abDigest, pbData, ss);
+
+        //HexEncoder encoder;
+        Base64Encoder encoder;
+        std::string output;
+        encoder.Attach(new CryptoPP::StringSink(output));
+        encoder.Put(abDigest, sizeof(abDigest));
+        encoder.MessageEnd();
+
+        return output;
+    }
+
+    static bool CheckValidPassword(const std::string& pass) {
+
+        boost::regex expression("(?=.*?[a-z])(?=.*[A-Z])(?=.*?[0-9)(?=.*?[#&!@$&*_]).{4,}$");
+        boost::smatch what;
+        if (boost::regex_match(pass, what, expression))
+        {
+            return true;
+        }
+        std::cout << "Incorrect password\n";
+        return false;
+    }
+
+    void InputUserName() noexcept {
+        std::cout << "Enter username: \n";
+        std::getline(std::cin, username);
+    }
+
+    void InputPassword() noexcept {
+
+        int tryNum = 0;
+        do {
+            tryNum++;
+            std::cout << "Enter password: \n";
+            char ch = 0;
+            std::string inPass{};
+            while (true) {
+                ch = _getch();
+                if (ch == '\r') {
+                    break;
+                }
+                inPass += ch;
+            }
+
+            if (CheckValidPassword(inPass)) {
+                password = SHA256(inPass);
+                if (password.size()) {
+                    userValid = true;
+                }
+                return;
+            }
+            std::cout << boost::str(boost::format("Failed try# %1%: \n") % tryNum);
+        } while (!userValid && tryNum < MAX_TRY_NUM);
+
+        if (tryNum > MAX_TRY_NUM) {
+            std::cout << "Input password is failed. Too much trying...\n";
+        }
+    }
+
+public:
+
+    bool StartAuthentication() noexcept {
+        std::cout << "Authentication ...\n";
+        InputUserName();
+        InputPassword();
+        return userValid;
+    }
+
+    User() {
+    }
+
+    ~User() {
+        std::cout << "Destruct User class\n";
+    }
+
+    const std::string GetUserAuthData() const noexcept {
+        return boost::str(boost::format("{%1%,%2%}") % username % password);
+    }
+
+};
 
 class SecureTcpConnection {
 
+    std::shared_ptr<User> user;
     std::queue<uint64_t> msg_queue;
     mutable std::shared_mutex mutex_;
 
@@ -122,10 +194,16 @@ private:
      */
     void start_init()
     {
-        /* hello message to the server */
-        std::string msg = "hello server";
+        user = std::make_shared <User>();
+        if (!user->StartAuthentication()) {
+            Shutdown();
+            return;
+        }
 
-        logger.Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
+        /* hello message to the server */
+        std::string userData = user->GetUserAuthData();
+        std::string msg{ hello_msg_header + user->GetUserAuthData() };
+        logger.Write(boost::str(boost::format(">> \"%1%,%2%\" [%3%]\n") % hello_msg_header % userData % 10));
 
         boost::asio::async_write(socket_, boost::asio::buffer(msg),
             boost::bind(&SecureTcpConnection::handle_init, this,
@@ -181,14 +259,13 @@ private:
             /* check that auth msg corresponds to default value */
             if (in_auth_msg.substr(0, auth_msg.size()).compare(auth_msg) == 0) {
                 id_ = in_auth_msg.substr(auth_msg.size());
+
 #if CHAT
                 try {
 
                     start_read();
-                    //start_write();
 
                     std::thread{ [&]() {
-
                         while (true) {
                             std::cout << "Which user do you want to send message to?\n";
                             std::string res;
@@ -204,7 +281,7 @@ private:
                             socket_.async_write_some(boost::asio::buffer(msg.str()),
                                 [&](const boost::system::error_code& error,
                                     std::size_t bytes_transferred) {
-                                        std::cout << "Message sended\n";
+                                        //std::cout << "Message sended\n";
                                 });
 
                             std::this_thread::sleep_for(std::chrono::milliseconds(4));
@@ -252,9 +329,6 @@ private:
 
             logger.Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
 
-            /* support of different register */
-            //to_lower(in_msg);
-
 #if CHAT
             start_read();
 #else 
@@ -268,12 +342,7 @@ private:
         else {
             Shutdown();
         }
-    }
-#if CHAT
-#include <chrono>
-#include <future>
-
-#endif /* CHAT */        
+    }  
 
     /***********************************************************************************
      *  @brief  Start async writing process from socket
@@ -380,10 +449,11 @@ private:
     boost::asio::ip::tcp::resolver::results_type endpoints;
 
     /* msgs headers to exchange with clients */
-    const std::string auth_msg = std::string("hello user id=");
-    const std::string tech_msg_header = std::string("user id=");
-    const std::string tech_resp_msg = std::string("number=");
-    const std::string tech_req_msg = std::string("summ=");
+    const std::string auth_msg{ "hello user id=" };
+    const std::string hello_msg_header{ "hello server" };
+    const std::string tech_msg_header{ "user id=" };
+    const std::string tech_resp_msg{ "number=" };
+    const std::string tech_req_msg{ "summ=" };
 
     /* unique id of client */
     std::string id_;
@@ -433,6 +503,7 @@ public:
             socket_.set_verify_mode(boost::asio::ssl::verify_peer);
             socket_.set_verify_callback(boost::bind(&SecureTcpConnection::verify_certificate, this, 
                 boost::placeholders::_1, boost::placeholders::_2));
+            //socket_.set_verify_callback(boost::asio::ssl::rfc2818_verification("google.com"/*boost::str(boost::format("%1%:%2%") % host % port)*/));
 
 
             logger.Write(boost::str(boost::format("Start connecting to %1%:%2% \n") % host % port));
@@ -455,39 +526,24 @@ public:
     }
 };
 
-#define SECURE_CONNECTION 1
-
-/* separate thread for processing of ESC key press (to close application) */
-static void EscapeWait() {
-    while (GetAsyncKeyState(VK_ESCAPE) == 0) {
-        Sleep(10);
-    }
-    exit(0);
-}
-
 int main() {
     /* for corrent output boost error messages */
     SetConsoleOutputCP(1251);
     std::cout << boost::format("Hello. Application version is %1%.%2%.%3%\n") % MAJOR % MINOR % PATCH;
-    logger.Write("Press ESC to exit...\n");
     try
     {
-        /* separate thread to monitor SPACE key pressing */
-        std::thread ext(&EscapeWait);
         /* start tcp client */
         boost::asio::io_context io_context;
-#if SECURE_CONNECTION
         boost::asio::ssl::context ctx(boost::asio::ssl::context::tlsv13);
         ctx.load_verify_file("rootca.crt");
         SecureTcpConnection conn(io_context, ctx);
-#endif /* SECURE_CONNECTION */
         io_context.run();
-        ext.detach();
     }
     catch (std::exception &ex)
     {
         std::cerr << "Exception: " << ex.what() << "\n";
     }
+    system("pause");
 
     return 0;
 }
