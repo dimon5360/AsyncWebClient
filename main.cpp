@@ -27,12 +27,28 @@
 #include <boost/bind/placeholders.hpp>
 #include <boost/format.hpp>
 
+#include <boost/thread.hpp>
+#include <boost/thread/scoped_thread.hpp>
+
 #include <boost/asio/ssl.hpp>
 
 #include <boost/lexical_cast.hpp>
 
-/* Build v.0.0.4 from 29.07.2021 */
-const uint32_t PATCH = 4;
+#include "cryptopp/hex.h"
+#include "cryptopp/base64.h"
+#include "cryptopp/sha.h"
+#include "cryptopp/hmac.h"
+#include "cryptopp/cryptlib.h"
+
+
+#include "conio.h"
+
+#include "boost/regex.hpp"
+
+#include "crypto/dh.h"
+
+/* Build v.0.0.5 from 02.08.2021 */
+const uint32_t PATCH = 5;
 const uint32_t MINOR = 0;
 const uint32_t MAJOR = 0;
 
@@ -67,148 +83,68 @@ public:
     }
 };
 
-#include "cryptopp/hex.h"
-#include "cryptopp/base64.h"
-#include "cryptopp/sha.h"
-#include "cryptopp/hmac.h"
-#include "cryptopp/cryptlib.h"
-
-
-#include "conio.h"
-
-#include "boost/regex.hpp"
-
-class User {
-private:
-    std::string username{}, password{};
-    bool userValid = false;
-
-    const int MAX_TRY_NUM = 3;
-
-    static std::string SHA256(const std::string& msg)
-    {
-        using namespace CryptoPP;
-        CryptoPP::SHA256 hash;
-
-        const size_t ss{ msg.size() };
-        byte const* pbData = (byte*)msg.data();
-        byte abDigest[CryptoPP::SHA256::DIGESTSIZE];
-
-        hash.CalculateDigest(abDigest, pbData, ss);
-
-        //HexEncoder encoder;
-        Base64Encoder encoder;
-        std::string output;
-        encoder.Attach(new CryptoPP::StringSink(output));
-        encoder.Put(abDigest, sizeof(abDigest));
-        encoder.MessageEnd();
-
-        return output;
-    }
-
-    static bool CheckValidPassword(const std::string& pass) {
-
-        boost::regex expression("(?=.*?[a-z])(?=.*[A-Z])(?=.*?[0-9)(?=.*?[#&!@$&*_]).{4,}$");
-        boost::smatch what;
-        if (boost::regex_match(pass, what, expression))
-        {
-            return true;
-        }
-        std::cout << "Incorrect password\n";
-        return false;
-    }
-
-    void InputUserName() noexcept {
-        std::cout << "Enter username: \n";
-        std::getline(std::cin, username);
-    }
-
-    void InputPassword() noexcept {
-
-        int tryNum = 0;
-        do {
-            tryNum++;
-            std::cout << "Enter password: \n";
-            char ch = 0;
-            std::string inPass{};
-            while (true) {
-                ch = _getch();
-                if (ch == '\r') {
-                    break;
-                }
-                inPass += ch;
-            }
-
-            if (CheckValidPassword(inPass)) {
-                password = SHA256(inPass);
-                if (password.size()) {
-                    userValid = true;
-                }
-                return;
-            }
-            std::cout << boost::str(boost::format("Failed try# %1%: \n") % tryNum);
-        } while (!userValid && tryNum < MAX_TRY_NUM);
-
-        if (tryNum > MAX_TRY_NUM) {
-            std::cout << "Input password is failed. Too much trying...\n";
-        }
-    }
-
-public:
-
-    bool StartAuthentication() noexcept {
-        std::cout << "Authentication ...\n";
-        InputUserName();
-        InputPassword();
-        return userValid;
-    }
-
-    User() {
-    }
-
-    ~User() {
-        std::cout << "Destruct User class\n";
-    }
-
-    const std::string GetUserAuthData() const noexcept {
-        return boost::str(boost::format("{%1%,%2%}") % username % password);
-    }
-
-};
-
 class SecureTcpConnection {
 
-    std::shared_ptr<User> user;
+private:
+    friend class SecureSession;
+
+    class SecureSession {
+
+    private:
+
+        std::pair<std::string, uint64_t> session;
+        int32_t private_key, common_secret_key;
+
+
+    public:
+        using session_ptr = std::shared_ptr<SecureSession>;
+
+        SecureSession() = delete;
+
+        static session_ptr CreateSession(const std::string& itselfUser, const uint64_t& secondUserId) {
+            return std::make_shared<SecureSession>(itselfUser, secondUserId);
+        }
+
+        const std::string& PrepareSecureMessage(const std::string& message) {
+
+            return "";
+        }
+
+        SecureSession(const std::string& itselfUser, const uint64_t& secondUserId) :
+            session({ itselfUser, secondUserId })
+        {
+            std::cout << "Start secure session\n";
+
+            // Generate first prime numbers
+            int32_t p = DH_Crypto::GetRandomPrimeNum(100, 150);
+            int32_t g = DH_Crypto::GetRandomPrimeNum(4, 10);
+
+            /* construct random generator */
+            std::unique_ptr<DH_Crypto> dh = std::make_unique<DH_Crypto>(p, g);
+
+            private_key = dh->GetRandomPrimeNum(100, 150);
+            int32_t A = dh->GetPublicKey();
+            int32_t B = dh->Calc(g, private_key, p);
+            dh->SetPublicKey(B);
+            common_secret_key = dh->Calc(A, private_key, p);
+            std::cout << "Client common secret key: " << common_secret_key << std::endl;
+        }
+
+        ~SecureSession() {
+            std::cout << "Secure session closed\n";
+        }
+    };
+
+
     std::queue<uint64_t> msg_queue;
     mutable std::shared_mutex mutex_;
+    std::unordered_map<uint64_t, SecureSession::session_ptr> secSessions;
 
-private:
 
     void to_lower(std::string& str) {
         std::transform(str.begin(), str.end(), str.begin(), ::tolower);
     }
 
-    /***********************************************************************************
-     *  @brief  Start process initialization of client
-     *  @return None
-     */
-    void start_init()
-    {
-        user = std::make_shared <User>();
-        if (!user->StartAuthentication()) {
-            Shutdown();
-            return;
-        }
-
-        /* hello message to the server */
-        std::string userData = user->GetUserAuthData();
-        std::string msg{ hello_msg_header + user->GetUserAuthData() };
-        logger.Write(boost::str(boost::format(">> \"%1%,%2%\" [%3%]\n") % hello_msg_header % userData % 10));
-
-        boost::asio::async_write(socket_, boost::asio::buffer(msg),
-            boost::bind(&SecureTcpConnection::handle_init, this,
-                boost::asio::placeholders::error));
-    }
 
     /***********************************************************************************
      *  @brief  Callback-handler of async initialization process
@@ -221,6 +157,8 @@ private:
             start_auth();
         }
         else {
+            logger.Write(boost::str(boost::format(
+                "HandleInit error user: %1% \"%2%\"\n") % id_ % error.message()));
             Shutdown();
         }
     }
@@ -238,6 +176,30 @@ private:
     }
 
 #define CHAT 1
+
+    void handle_session(const uint64_t dstUserId) {
+
+        if (!secSessions.contains(dstUserId)) {
+            /* Create session between two defined users */
+            secSessions.emplace(dstUserId, SecureSession::CreateSession(id_, dstUserId));
+        }
+
+        std::cout << "What do you want to write?\n";
+        std::string messsage;
+        std::getline(std::cin, messsage);
+
+        std::string msg{ boost::str(boost::format("%1%%2%, %3%%4%") % tech_msg_header % dstUserId % tech_resp_msg % messsage) };
+
+        logger.Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
+
+        socket_.async_write_some(boost::asio::buffer(msg),
+            [&](const boost::system::error_code& error,
+                std::size_t bytes_transferred) {
+                    //std::cout << "Message sended\n";
+            });
+
+    }
+
 
     /***********************************************************************************
      *  @brief  Callback-handler of async authentication process
@@ -272,6 +234,14 @@ private:
                             std::getline(std::cin, res);
 
                             uint64_t dstUserId = boost::lexical_cast<uint64_t>(res);
+
+                            //std::thread{ [&]() {
+                                handle_session(dstUserId);
+                            //} }.join();
+
+
+                           /* secSessions.emplace(dstUserId, SecureSession::CreateSession(id_, dstUserId));
+
                             std::stringstream msg;
 
                             msg << tech_msg_header << dstUserId << ", " << tech_resp_msg << randGen->GenRandomNumber();
@@ -282,7 +252,7 @@ private:
                                 [&](const boost::system::error_code& error,
                                     std::size_t bytes_transferred) {
                                         //std::cout << "Message sended\n";
-                                });
+                                });*/
 
                             std::this_thread::sleep_for(std::chrono::milliseconds(4));
                         }
@@ -409,7 +379,7 @@ private:
         char subject_name[256];
         X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
         X509_NAME_oneline(X509_get_subject_name(cert), subject_name, 256);
-        std::cout << "Verifying " << subject_name << "\n";
+        //std::cout << "Verifying " << subject_name << "\n";
 
         return preverified;
     }
@@ -425,6 +395,7 @@ private:
         else
         {
             std::cout << "Connect failed: " << error.message() << "\n";
+            Shutdown();
         }
     }
     void handle_handshake(const boost::system::error_code& error)
@@ -436,14 +407,16 @@ private:
         else
         {
             std::cout << "Handshake failed: " << error.message() << "\n";
+            Shutdown();
         }
     }
 
     /* unique pointer to random number generator */
     std::unique_ptr<RandomGen> randGen;
-    /* cliet nboost tcp socket object */
-    //boost::asio::ip::tcp::socket socket_;
-    boost::asio::ssl::stream<boost::asio::ip::tcp::socket> socket_;
+    /* alias for ssl stream to tcp socket */
+    using ssl_socket = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>;
+    /* cliet boost ssl socket object */
+    ssl_socket socket_;
 
     boost::asio::ip::tcp::resolver resolver_;
     boost::asio::ip::tcp::resolver::results_type endpoints;
@@ -452,7 +425,7 @@ private:
     const std::string auth_msg{ "hello user id=" };
     const std::string hello_msg_header{ "hello server" };
     const std::string tech_msg_header{ "user id=" };
-    const std::string tech_resp_msg{ "number=" };
+    const std::string tech_resp_msg{ "message=" };
     const std::string tech_req_msg{ "summ=" };
 
     /* unique id of client */
@@ -465,8 +438,33 @@ private:
     /* parameters of host and port to connect */
     const std::string host = "localhost";
     const std::string port = "4059";
+    std::string info;
+
+    /***********************************************************************************
+     *  @brief  Start process initialization of client
+     *  @return None
+     */
+    void start_init()
+    {
+        /* hello message to the server */
+        std::string msg{ hello_msg_header + info };
+
+        logger.Write(boost::str(boost::format(">> \"%1%,%2%\" [%2%]\n") % msg % msg.size()));
+
+        boost::asio::async_write(socket_, boost::asio::buffer(msg),
+            boost::bind(&SecureTcpConnection::handle_init, this,
+                boost::asio::placeholders::error));
+    }
 
 public:
+
+    void start_connect(const std::string& userInfo)
+    {
+        info = userInfo;
+        boost::asio::async_connect(socket_.lowest_layer(), endpoints,
+            boost::bind(&SecureTcpConnection::handle_connect, this,
+                boost::asio::placeholders::error));
+    }
 
 
     void Shutdown() {
@@ -499,7 +497,6 @@ public:
     {
         std::cout << "SecureTcpConnection constructor.\n";
         try {
-
             socket_.set_verify_mode(boost::asio::ssl::verify_peer);
             socket_.set_verify_callback(boost::bind(&SecureTcpConnection::verify_certificate, this, 
                 boost::placeholders::_1, boost::placeholders::_2));
@@ -508,10 +505,10 @@ public:
 
             logger.Write(boost::str(boost::format("Start connecting to %1%:%2% \n") % host % port));
             endpoints = resolver_.resolve(boost::asio::ip::tcp::v4(), host, port);
-           
-            boost::asio::async_connect(socket_.lowest_layer(), endpoints,
+
+            /*boost::asio::async_connect(socket_.lowest_layer(), endpoints,
                 boost::bind(&SecureTcpConnection::handle_connect, this,
-                    boost::asio::placeholders::error));
+                    boost::asio::placeholders::error));*/
 
             randGen = std::make_unique<RandomGen>();
         }
@@ -526,6 +523,147 @@ public:
     }
 };
 
+class User {
+private:
+    std::string username{}, password{};
+    bool userValid = false;
+
+    const int MAX_TRY_NUM = 3;
+
+    static std::string SHA256(const std::string& msg)
+    {
+        using namespace CryptoPP;
+        CryptoPP::SHA256 hash;
+
+        const size_t ss{ msg.size() };
+        byte const* pbData = (byte*)msg.data();
+        byte abDigest[CryptoPP::SHA256::DIGESTSIZE];
+
+        hash.CalculateDigest(abDigest, pbData, ss);
+
+        //HexEncoder encoder;
+        Base64Encoder encoder;
+        std::string output;
+        encoder.Attach(new CryptoPP::StringSink(output));
+        encoder.Put(abDigest, sizeof(abDigest));
+        encoder.MessageEnd();
+
+        return output;
+    }
+
+    static bool CheckValidPassword(const std::string& pass) {
+
+        boost::regex expression("(?=.*?[a-z])(?=.*[A-Z])(?=.*?[0-9)(?=.*?[#&!@$&*_]).{4,}$");
+        boost::smatch what;
+        if (boost::regex_match(pass, what, expression))
+        {
+            return true;
+        }
+        std::cout << "Incorrect password\n";
+        return false;
+    }
+
+    static bool CheckValidUserName(const std::string& username) {
+
+        return !username.empty();
+
+        boost::regex expression("@(^[a-zA-Z0-9])$"); // TODO: create regexp
+        boost::smatch what;
+        if (boost::regex_match(username, what, expression))
+        {
+            return true;
+        }
+        std::cout << "Incorrect username\n";
+        return false;
+    }
+
+    void InputUserName() noexcept {
+        std::cout << "Enter username: \n";
+        std::getline(std::cin, username);
+    }
+
+    void InputPassword() noexcept {
+
+        int tryNum = 0;
+        do {
+            tryNum++;
+            std::cout << "Enter password: \n";
+            std::string inPass{};
+            char ch = 0;
+            while (true) {
+                ch = _getch();
+                if (ch == '\r') {
+                    break;
+                }
+                else if (ch == 3) {
+                    return;
+                }
+                inPass += ch;
+            }
+
+            if (CheckValidPassword(inPass)) {
+                password = SHA256(inPass);
+                if (password.size()) {
+                    userValid = true;
+                }
+                return;
+            }
+            std::cout << boost::str(boost::format("Failed try# %1%: \n") % tryNum);
+        } while (!userValid && tryNum < MAX_TRY_NUM);
+
+        if (tryNum > MAX_TRY_NUM) {
+            std::cout << "Input password is failed. Too much trying...\n";
+        }
+    }
+
+    std::shared_ptr<SecureTcpConnection> conn;
+    boost::asio::ssl::context ssl_context;
+public:
+
+    bool StartAuthentication() {
+        std::cout << "Authentication ...\n";
+        InputUserName();
+        if (!CheckValidUserName(username)) {
+            return false;
+        }
+        InputPassword();
+        return userValid;
+    }
+
+    void StartInitialization() {
+        conn->start_connect(GetUserAuthData());
+    }
+
+    User(boost::asio::io_service&& io_service) :
+        ssl_context(boost::asio::ssl::context::tlsv13)
+    {
+        ssl_context.load_verify_file("rootca.crt");
+        conn = std::make_shared<SecureTcpConnection>(io_service, ssl_context);
+        if (StartAuthentication()) {
+            std::cout << "Authentication performed\n";
+            StartInitialization();
+            io_service.run();
+        }
+    }
+
+    ~User() {
+        std::cout << "Destruct User class\n";
+    }
+
+    const std::string GetUserAuthData() const noexcept {
+        return boost::str(boost::format("{%1%,%2%}") % username % password);
+    }
+
+    static void CreateNewUser(boost::asio::io_service& io_service) {
+        try {
+            std::make_unique<User>(std::move(io_service));
+        }
+        catch (std::exception& ex) {
+            logger.Write(boost::str(boost::format("CreateNewUser exception: %1%\n") % ex.what()));
+        }
+    }
+};
+
 int main() {
     /* for corrent output boost error messages */
     SetConsoleOutputCP(1251);
@@ -533,17 +671,21 @@ int main() {
     try
     {
         /* start tcp client */
-        boost::asio::io_context io_context;
-        boost::asio::ssl::context ctx(boost::asio::ssl::context::tlsv13);
-        ctx.load_verify_file("rootca.crt");
-        SecureTcpConnection conn(io_context, ctx);
-        io_context.run();
+        boost::asio::io_service ios;
+        boost::asio::signal_set signals(ios, SIGINT);
+        User::CreateNewUser(std::ref(ios));
+    
+        /* asynchronous wait for Ctrl + C signal to occur */ // TODO: signal does not work
+        /*signals.async_wait([&](const boost::system::error_code& error, int signal_number) {
+            ios.stop();
+            throw "Signal is Ctrl + C\n";
+        });*/
+        ios.run();
     }
     catch (std::exception &ex)
     {
         std::cerr << "Exception: " << ex.what() << "\n";
     }
-    system("pause");
 
     return 0;
 }
