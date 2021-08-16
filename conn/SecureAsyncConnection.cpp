@@ -1,7 +1,7 @@
 
 
 /* local C++ headers */
-#include "SecureAsyncConnectoin.h"
+#include "SecureAsyncConnection.h"
 
 /* std C++ lib headers */
 #include <cstdlib>

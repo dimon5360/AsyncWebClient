@@ -30,7 +30,10 @@
     <ClCompile Include="test\test.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="conn\SecureAsyncConnectoin.cpp">
+    <ClCompile Include="conn\SecureAsyncConnection.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="conn\User.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
   </ItemGroup>
@@ -47,7 +50,10 @@
     <ClInclude Include="test\test.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="conn\SecureAsyncConnectoin.h">
+    <ClInclude Include="conn\SecureAsyncConnection.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="conn\User.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

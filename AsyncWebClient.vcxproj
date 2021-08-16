@@ -141,7 +141,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="conn\SecureAsyncConnectoin.cpp" />
+    <ClCompile Include="conn\SecureAsyncConnection.cpp" />
+    <ClCompile Include="conn\User.cpp" />
     <ClCompile Include="crypto\dh.cpp" />
     <ClCompile Include="crypto\rsa.cpp" />
     <ClCompile Include="gui\App.cpp" />
@@ -149,7 +150,8 @@
     <ClCompile Include="test\test.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="conn\SecureAsyncConnectoin.h" />
+    <ClInclude Include="conn\SecureAsyncConnection.h" />
+    <ClInclude Include="conn\User.h" />
     <ClInclude Include="crypto\dh.h" />
     <ClInclude Include="crypto\rsa.h" />
     <ClInclude Include="gui\App.h" />
