@@ -66,9 +66,9 @@ int32_t DH_Crypto::Calc(const int32_t number, const int32_t degree, const int32_
     return static_cast<int32_t>(res % divider);
 }
 
-void DH_Crypto::SetPublicKey(const int32_t ClientPublicKey) {
+void DH_Crypto::GenCommonSecret(const int32_t ClientPublicKey) {
     common_secret_key = Calc(ClientPublicKey, private_key, p);
-    std::cout << "Server common secret key: " << common_secret_key << std::endl;
+    std::cout << "Common secret key: " << common_secret_key << std::endl;
 }
 
 int32_t DH_Crypto::GetPublicKey() const {
@@ -79,11 +79,14 @@ void DH_Crypto::GenPublicKey() noexcept {
     public_key = Calc(g, private_key, p);
 }
 
-DH_Crypto::DH_Crypto(int32_t p_, int32_t g_) :
-    p(p_),
-    g(g_)
+DH_Crypto::DH_Crypto()
 {
-    std::cout << "Construct new Diffie-Hellman crypto class\n";
+    // Generate first prime numbers
+    p = DH_Crypto::GetRandomPrimeNum(100, 150);
+    g = DH_Crypto::GetRandomPrimeNum(4, 10);
+
+    //std::cout << "p = " << p << ", g = " << g << std::endl;
+    //std::cout << "Construct new Diffie-Hellman crypto class\n";
 
     /* construct random generator */
     private_key = GetRandomPrimeNum(100, 150);
@@ -92,5 +95,5 @@ DH_Crypto::DH_Crypto(int32_t p_, int32_t g_) :
 
 DH_Crypto::~DH_Crypto() {
 
-    std::cout << "Destruct Diffie-Hellman crypto class\n";
+    //std::cout << "Destruct Diffie-Hellman crypto class\n";
 }

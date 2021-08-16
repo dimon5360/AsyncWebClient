@@ -21,11 +21,11 @@ public:
 
     DhRandomGen()
     {
-        std::cout << "Construct new random numbers generator class\n";
+        //std::cout << "Construct new random numbers generator class\n";
     }
 
     ~DhRandomGen() {
-        std::cout << "Destruct random generator class\n";
+        //std::cout << "Destruct random generator class\n";
     }
 
     /* getter for new random number to send in server */
@@ -38,7 +38,7 @@ class DH_Crypto {
 private:
 
     int32_t p, g;
-    int32_t common_secret_key, private_key, public_key;
+    int32_t common_secret_key, private_key, public_key = -1;
 
     static bool IsPrime(const int32_t prime);
     void GenPublicKey() noexcept;
@@ -49,8 +49,8 @@ public:
 
     int32_t Calc(const int32_t number, const int32_t degree, const int32_t divider) const;
     int32_t GetPublicKey() const;
-    void SetPublicKey(const int32_t ClientPublicKey);
+    void GenCommonSecret(const int32_t ClientPublicKey);
 
-    DH_Crypto(int32_t p_, int32_t g_);
+    DH_Crypto();
     ~DH_Crypto();
 };
