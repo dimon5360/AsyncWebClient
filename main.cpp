@@ -20,7 +20,7 @@ const uint32_t MAJOR = 0;
 
 int main() {
 
-#ifdef UNIT_TEST
+#if UNIT_TEST
 
     init_unit_tests();
     return 0;

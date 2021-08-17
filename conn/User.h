@@ -1,3 +1,11 @@
+/******************************************************
+ *  @file   User.h
+ *
+ *  @author Kalmykov Dmitry
+ *  @date   16.08.2021
+ */
+
+#pragma once
 
 /* local C++ headers */
 #include "SecureAsyncConnection.h"
