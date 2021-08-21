@@ -9,9 +9,17 @@
 
 /* local C++ headers */
 #include "SecureAsyncConnection.h"
+#include "MessageBroker.h"
+
+/* std C++ lib headers */
+#include <shared_mutex>
+#include <queue>
 
 class User {
 private:
+    /* to keep msg between App GUI and TCP connection handler */
+    std::unique_ptr<MessageBroker> msgBroker;
+
     std::string username{}, password{};
     bool userValid = false;
 
@@ -29,16 +37,20 @@ private:
 
     std::shared_ptr<SecureTcpConnection> conn;
     boost::asio::ssl::context ssl_context;
-public:
-
+    boost::asio::io_service& io_service;
+    void handle();
     bool StartAuthentication();
 
     void StartInitialization();
+public:
+    void UserStart();
+
+    void SendMessageToUser(const uint64_t dstUsetId, std::string&& msg);
 
     User(boost::asio::io_service&& io_service);
     ~User();
 
     const std::string GetUserAuthData() const noexcept;
 
-    static void CreateNewUser(boost::asio::io_service& io_service);
+    static std::shared_ptr<User> CreateNewUser(boost::asio::io_service& io_service);
 };

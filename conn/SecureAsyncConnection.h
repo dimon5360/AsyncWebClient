@@ -9,6 +9,7 @@
 
 /* local C++ headers ---------------------------------------- */
 #include "../crypto/dh.h"
+#include "MessageBroker.h"
 
 /* std C++ lib headers -------------------------------------- */
 #include <string>
@@ -27,7 +28,7 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/array.hpp>
 
-class FileLogger {
+class Logger {
 
 public:
 
@@ -91,12 +92,6 @@ private:
         ~SecureSession();
     };
 
-
-    std::queue<uint64_t> msg_queue;
-    mutable std::shared_mutex mutex_;
-    std::unordered_map<uint64_t, SecureSession::session_ptr> secSessions;
-
-
     void to_lower(std::string& str);
 
     /***********************************************************************************
@@ -151,13 +146,6 @@ private:
         std::size_t bytes_transferred);
 
     /***********************************************************************************
-     *  @brief  Start async writing process from socket
-     *  @param  None
-     *  @return None
-     */
-    void start_write();
-
-    /***********************************************************************************
      *  @brief  Callback-handler of async writing process
      *  @param  error Boost system error object reference
      *  @return None
@@ -199,6 +187,11 @@ private:
     const std::string port = "4059";
     std::string info;
 
+    //using message_t = std::pair<uint64_t, const std::string>;
+    std::queue<MessageBroker::message_t> msg_queue;
+    mutable std::shared_mutex mutex_;
+    std::unordered_map<uint64_t, SecureSession::session_ptr> secSessions;
+
     /***********************************************************************************
      *  @brief  Start process initialization of client
      *  @return None
@@ -206,6 +199,19 @@ private:
     void start_init();
 
 public:
+
+    void PushMessage(MessageBroker::message_t&& msg) {
+        std::unique_lock lk(mutex_);
+        msg_queue.emplace(std::move(msg));
+    }
+
+    /***********************************************************************************
+     *  @brief  Start async writing process from socket
+     *  @param  None
+     *  @return None
+     */
+    void start_write(MessageBroker::message_t&& msg);
+
 
     void start_connect(const std::string& userInfo);
 

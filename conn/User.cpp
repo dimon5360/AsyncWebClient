@@ -22,7 +22,6 @@
 #include "boost/regex.hpp"
 #include <boost/format.hpp>
 
-
 std::string User::SHA256(const std::string& msg)
 {
     using namespace CryptoPP;
@@ -113,12 +112,31 @@ void User::InputPassword() noexcept {
 bool User::StartAuthentication() {
     std::cout << "Authentication ...\n";
     return true;
-    InputUserName();
+    /*InputUserName();
     if (!CheckValidUserName(username)) {
         return false;
     }
     InputPassword();
-    return userValid;
+    return userValid;*/
+}
+
+/*void User::handle() {
+    std::thread{ [&]() {
+        while (!msgBroker->IsQueueEmpty()) {
+            MessageBroker::message_t msg = msgBroker->PullMessage();
+
+            std::cout << msg.first << " " << msg.second << std::endl;
+            //conn->PushMessage(std::move(msg));
+            //conn->start_write(std::move(msg));
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }}.join();
+}*/
+
+void User::SendMessageToUser(const uint64_t dstUsetId, std::string&& msg) {
+    //msgBroker->PushMessage(dstUsetId, std::move(msg));
+    //conn->PushMessage(std::make_pair(dstUsetId, msg));
+    conn->start_write(std::make_pair(dstUsetId, msg));
 }
 
 void User::StartInitialization() {
@@ -129,25 +147,37 @@ const std::string User::GetUserAuthData() const noexcept {
     return boost::str(boost::format("{%1%,%2%}") % username % password);
 }
 
-void User::CreateNewUser(boost::asio::io_service& io_service) {
+std::shared_ptr<User> User::CreateNewUser(boost::asio::io_service& io_service) {
     try {
-        std::make_unique<User>(std::move(io_service));
+        return std::make_shared<User>(std::move(io_service));
     }
     catch (std::exception& ex) {
-        FileLogger::Write(boost::str(boost::format("CreateNewUser exception: %1%\n") % ex.what()));
+        Logger::Write(boost::str(boost::format("CreateNewUser exception: %1%\n") % ex.what()));
     }
 }
 
-User::User(boost::asio::io_service&& io_service) :
-    ssl_context(boost::asio::ssl::context::tlsv13)
-{
-    ssl_context.load_verify_file("rootca.crt");
-    conn = std::make_shared<SecureTcpConnection>(io_service, ssl_context);
-    if (StartAuthentication()) {
+void User::UserStart() {
+    //if (StartAuthentication()) {
+        msgBroker = std::make_unique<MessageBroker>();
+        //handle();
         std::cout << "Authentication performed\n";
         StartInitialization();
         io_service.run();
-    }
+    //}
+    std::cout << "User constructor\n";
+}
+
+User::User(boost::asio::io_service&& io_service_) :
+    io_service(io_service_),
+    ssl_context(boost::asio::ssl::context::tlsv13)
+{
+    ssl_context.load_verify_file("rootca.crt");
+    conn = std::make_shared<SecureTcpConnection>(io_service_, ssl_context);
+    msgBroker = std::make_unique<MessageBroker>();
+    //handle();
+    /*std::cout << "Authentication performed\n";
+    StartInitialization();
+    io_service.run();*/
 }
 
 User::~User() {

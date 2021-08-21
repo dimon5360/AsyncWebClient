@@ -90,7 +90,7 @@ void SecureTcpConnection::handle_init(const boost::system::error_code& error)
         start_auth();
     }
     else {
-        FileLogger::Write(boost::str(boost::format(
+        Logger::Write(boost::str(boost::format(
             "HandleInit error user: %1% \"%2%\"\n") % id_ % error.message()));
         Shutdown();
     }
@@ -132,7 +132,7 @@ void SecureTcpConnection::handle_establish_secure(const boost::system::error_cod
         try {
 
             std::string in_msg{ buf.data(), bytes_transferred };
-            FileLogger::Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
+            Logger::Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
 
             if (in_msg.substr(0, tech_msg_header.size()).compare(tech_msg_header) == 0) {
 
@@ -179,7 +179,7 @@ void SecureTcpConnection::SendPublicKey(const uint64_t& srcUserId, const uint64_
     auto req = boost::str(boost::format("%1%%2%:%3%, %4%%5%")
         % tech_msg_header % srcUserId % dstUserId % tech_pub_key_msg % key);
 
-    FileLogger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % req % req.size()));
+    Logger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % req % req.size()));
 
     socket_.async_write_some(boost::asio::buffer(req),
         [&](const boost::system::error_code& error,
@@ -209,7 +209,7 @@ void SecureTcpConnection::handle_session(const uint64_t& dstUserId) {
         std::string msg = boost::str(boost::format("%1%%2%:%3%, %3%%4%")
             % tech_msg_header % id_ % dstUserId % tech_resp_msg % messsage);
 
-        FileLogger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
+        Logger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
 
         socket_.async_write_some(boost::asio::buffer(msg),
             [&](const boost::system::error_code& error,
@@ -231,7 +231,7 @@ void SecureTcpConnection::handle_auth(const boost::system::error_code& error,
     if (!error) {
 
         std::string in_auth_msg{ buf.data(), bytes_transferred };
-        FileLogger::Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_auth_msg % bytes_transferred));
+        Logger::Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_auth_msg % bytes_transferred));
 
         /* support of different register */
         to_lower(in_auth_msg);
@@ -240,6 +240,7 @@ void SecureTcpConnection::handle_auth(const boost::system::error_code& error,
         if (in_auth_msg.substr(0, auth_msg.size()).compare(auth_msg) == 0) {
             id_ = boost::lexical_cast<uint64_t>(in_auth_msg.substr(auth_msg.size()));
 #if CHAT
+#if 0
             try {
 
                 finish_establish_session();
@@ -266,6 +267,9 @@ void SecureTcpConnection::handle_auth(const boost::system::error_code& error,
             catch (std::exception& ex) {
                 std::cout << ex.what();
             }
+            #else 
+#endif 
+            start_read();
 #else 
             start_read();
 #endif /* CHAT */
@@ -302,7 +306,7 @@ void SecureTcpConnection::handle_read(const boost::system::error_code& error,
 
         std::string_view in_msg{ buf.data(), bytes_transferred };
 
-        FileLogger::Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
+        Logger::Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
 
 #if CHAT
         start_read();
@@ -324,22 +328,32 @@ void SecureTcpConnection::handle_read(const boost::system::error_code& error,
 *  @param  None
 *  @return None
 */
-void SecureTcpConnection::start_write()
+void SecureTcpConnection::start_write(MessageBroker::message_t&& msgData)
 {
 #if CHAT
-    if (!msg_queue.empty()) {
+    //if (!msg_queue.empty()) {
 
-        std::stringstream msg;
-        uint64_t dstUserId = msg_queue.front();
+        //std::stringstream msg;
+        //MessageBroker::message_t msgData = msg_queue.front();
 
-        msg << tech_msg_header << id_ << ", " << tech_resp_msg << randGen->GenRandomNumber();
+        //msg << tech_msg_header << id_ << ", " << tech_resp_msg << randGen->GenRandomNumber();
 
-        FileLogger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg.str() % msg.str().size()));
+        std::string msg{ boost::str(boost::format("%1%%2%, %3%%4%") % tech_msg_header % msgData.first % tech_resp_msg % msgData.second) };
+        Logger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
 
-        boost::asio::async_write(socket_, boost::asio::buffer(msg.str()),
-            boost::bind(&SecureTcpConnection::handle_write, this,
-                boost::asio::placeholders::error));
-    }
+        socket_.async_write_some(boost::asio::buffer(msg),
+            [&](const boost::system::error_code& error,
+                std::size_t bytes_transferred) {
+                if (error) {
+                    Logger::Write(boost::str(boost::format(
+                        "Invalid hello message from user %1%: \"%2%\"\n") % id_ % error.message()));
+                    Shutdown();
+                }
+            });
+
+            /*boost::bind(&SecureTcpConnection::handle_write, this,
+                boost::asio::placeholders::error));*/
+    //}
 #else 
     std::stringstream msg;
     msg << tech_msg_header << id_ << ", " << tech_resp_msg << randGen->GenRandomNumber();
@@ -361,7 +375,7 @@ void SecureTcpConnection::handle_write(const boost::system::error_code& error)
 {
     if (!error) {
 #if CHAT
-        start_write();
+        //start_write();
 #else 
         start_read();
 #endif /* CHAT */
@@ -425,7 +439,7 @@ void SecureTcpConnection::start_init()
     /* hello message to the server */
     std::string msg{ hello_msg_header + info };
 
-    FileLogger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
+    Logger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
 
     boost::asio::async_write(socket_, boost::asio::buffer(msg),
         boost::bind(&SecureTcpConnection::handle_init, this,
@@ -460,7 +474,7 @@ void SecureTcpConnection::HandleShutdown(const boost::system::error_code& error)
 *  @return None
 */
 void SecureTcpConnection::close(const boost::system::error_code& error) {
-    FileLogger::Write(boost::str(boost::format("Close connection error: %2% \n") % id_ % error.message()));
+    Logger::Write(boost::str(boost::format("Close connection error: %2% \n") % id_ % error.message()));
 
     socket_.lowest_layer().close();
 }
@@ -475,7 +489,7 @@ SecureTcpConnection::SecureTcpConnection(boost::asio::io_context& io_context, bo
         socket_.set_verify_callback(boost::bind(&SecureTcpConnection::verify_certificate, this,
             boost::placeholders::_1, boost::placeholders::_2));
 
-        FileLogger::Write(boost::str(boost::format("Start connecting to %1%:%2% \n") % host % port));
+        Logger::Write(boost::str(boost::format("Start connecting to %1%:%2% \n") % host % port));
         endpoints = resolver_.resolve(boost::asio::ip::tcp::v4(), host, port);
 
         randGen = std::make_unique<RandomGen>();

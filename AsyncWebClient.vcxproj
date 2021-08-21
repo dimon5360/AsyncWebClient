@@ -150,6 +150,7 @@
     <ClCompile Include="test\test.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="conn\MessageBroker.h" />
     <ClInclude Include="conn\SecureAsyncConnection.h" />
     <ClInclude Include="conn\User.h" />
     <ClInclude Include="crypto\dh.h" />

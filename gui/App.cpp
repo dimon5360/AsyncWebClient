@@ -20,82 +20,95 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/format.hpp>
 
-Application::Application(boost::asio::io_service& ios) :
+/*Application::Application(boost::asio::io_service& ios) :
     io_service(std::ref(ios)),
     work(ios)
 {
     std::cout << "Construct Application class\n";
 
-    /* separate thread to start tcp server */
     for (int i = 0; i < boost::thread::hardware_concurrency(); ++i)
     {
         threads.create_thread([&]() {
             work.get_io_context().run();
         });
     }
-}
+}*/
 
-Application::~Application() {
+/*Application::Application(std::shared_ptr<User> user_):
+    user(user_)
+{
+    std::cout << "Construct Application class\n";
+}*/
+
+/*Application::~Application() {
     std::cout << "Destroy Application class\n";
-    work.get_io_context().stop();
-    threads.join_all();
-}
+    //work.get_io_context().stop();
+    //threads.join_all();
+}*/
 
+// TODO:
+/******************************************************************************************
+ * Realized:
+ *      1. Button "Send" to get message from textbox and print to console
+ *      2. Textbox to input message 
+ *      3. Label with common information
+ * 
+ * Need to realize:
+ *      1. Big text box with scroll to out received message from another users
+ *      2. Struct with clickable fields to select user whom you want to send message
+ *      3. Send entered message from textbox through TCP channel to another user
+ *      4. Out entered message into the big textbox
+ *      5. Out received into big textbox (for each specific user)
+ *      6. Open form with big textbox for each user by clicking on its field in struct
+ ******************************************************************************************/
 
-void Application::InitializeApp() {
+void Application::InitializeApp(std::shared_ptr<User> user_) {
+
+    //std::shared_ptr<User> user;
 
     try
     {
-        boost::asio::post(work.get_io_context(), [&]() {
-            User::CreateNewUser(std::ref(io_service));
-        });
+        //std::thread{ [&]() {
+            using namespace nana;
 
-        using namespace nana;
+            //Define a form.
+            form fm;
 
-        //Define a form.
-        form fm;
+            static uint16_t fontSize = 16;
+            static int8_t fontInc = -2;
 
-        static uint16_t fontSize = 16;
-        static int8_t fontInc = -2;
+            //Define a button and answer the click event.
+            //button btn(fm, nana::rectangle(20, 20, 140, 40));
+            button btn{ fm, "Send" };
 
-        //Define a button and answer the click event.
-        button btn{ fm, "Decrease font size" };
+            textbox tbox{ fm/*, nana::rectangle(20, 20, 140, 40)*/ };
+            //tbox.borderless(true);
 
-        textbox txt_{ fm };
-        txt_.borderless(true);
+            label lab{ fm, boost::str(boost::format("Hello, <size=%1%>Nana C++ Library</>") % fontSize) };
+            lab.format(true);
 
-        label lab{ fm, boost::str(boost::format("Hello, <size=%1%>Nana C++ Library</>") % fontSize) };
-        lab.format(true);
+            std::thread tUserConn;
 
-        btn.events().click([&] {
+            btn.events().click([&] {
+                std::string tx = tbox.text();
+                std::cout << tx << std::endl;
+                user_->SendMessageToUser(10, std::move(tx));
+            });
 
-            if (fontInc < 0 && fontSize < 12) {
-                std::cout << "Increase font size\n";
-                fontInc = 2;
-                btn.caption("Increase font size");
-            } else if (fontInc > 0 && fontSize > 18) {
-                std::cout << "Decrease font size\n";
-                fontInc = -2;
-                btn.caption("Decrease font size");
-            }
+            //Layout management
+            fm.div("vert <><<><weight=80% text><>><><weight=24<><button><>><><weight=24<><weight=60% textbox><>><>");
+            //fm.div("vert <weight=80% text><weight=24 button><weight=100% textbox>");
+            fm["button"] << btn;
+            fm["text"] << lab;
+            fm["textbox"] << tbox;
+            fm.collocate();
 
-            fontSize += fontInc;
-            lab.caption(boost::str(boost::format("Hello, <size=%1%>Nana C++ Library</>") % fontSize));
-        });
+            //Show the form
+            fm.show();
 
-        //Layout management
-        fm.div("vert <weight=80% text><weight=24 button><textbox>");
-        fm["button"] << btn;
-        fm["text"] << lab;
-        fm["textbox"] << txt_;
-        fm.collocate();
-
-        //Show the form
-        fm.show();
-
-        //Start to event loop process, it blocks until the form is closed.
-        exec();
-        //ios.run();
+            //Start to event loop process, it blocks until the form is closed.
+            exec();
+        //} }.join();
     }
     catch (std::exception& ex)
     {

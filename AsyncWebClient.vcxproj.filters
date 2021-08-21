@@ -56,5 +56,8 @@
     <ClInclude Include="conn\User.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="conn\MessageBroker.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
