@@ -136,26 +136,7 @@ private:
      */
     void start_read();
 
-    /***********************************************************************************
-     *  @brief  Callback-handler of async reading process
-     *  @param  error Boost system error object reference
-     *  @param  recvBytes Amount of bytes received from connection
-     *  @return None
-     */
-    void handle_read(const boost::system::error_code& error,
-        std::size_t bytes_transferred);
-
-    /***********************************************************************************
-     *  @brief  Callback-handler of async writing process
-     *  @param  error Boost system error object reference
-     *  @return None
-     */
-    void handle_write(const boost::system::error_code& error);
-
     bool verify_certificate(bool preverified, boost::asio::ssl::verify_context& ctx);
-
-    void handle_connect(const boost::system::error_code& error);
-    void handle_handshake(const boost::system::error_code& error);
 
     /* unique pointer to random number generator */
     std::unique_ptr<RandomGen> randGen;
@@ -217,8 +198,6 @@ public:
 
 
     void Shutdown();
-
-    void HandleShutdown(const boost::system::error_code& error);
 
 
     /***********************************************************************************
