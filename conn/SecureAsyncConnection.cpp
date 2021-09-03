@@ -276,7 +276,8 @@ void SecureTcpConnection::start_read()
 */
 void SecureTcpConnection::start_write(MessageBroker::message_t&& msgData)
 {
-    std::string msg{ boost::str(boost::format("%1%%2%, %3%%4%") % tech_msg_header % msgData.first % tech_resp_msg % msgData.second) };
+    std::string msg{ boost::str(boost::format("%1%") % msgData.second) };
+    //std::string msg{ boost::str(boost::format("%1%%2%, %3%%4%") % tech_msg_header % msgData.first % tech_resp_msg % msgData.second) };
     Logger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
 
     socket_.async_write_some(boost::asio::buffer(msg),
