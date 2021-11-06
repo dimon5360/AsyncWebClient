@@ -27,30 +27,20 @@ private:
 
     static std::string SHA256(const std::string& msg);
 
-    static bool CheckValidPassword(const std::string& pass);
-
-    static bool CheckValidUserName(const std::string& username);
-
-    void InputUserName() noexcept;
-
-    void InputPassword() noexcept;
-
     std::shared_ptr<SecureTcpConnection> conn;
     boost::asio::ssl::context ssl_context;
     boost::asio::io_service& io_service;
-    void handle();
-    bool StartAuthentication();
+    std::unique_ptr<JsonHandler> jsonHandler;
 
     void StartInitialization();
+
 public:
     void UserStart();
-
-    void SendMessageToUser(const uint64_t dstUsetId, std::string&& msg);
+    void SendMessageToUser(SecureTcpConnection::user_id_t dstUsetId, std::string&& msg);
+    const std::string GetUserAuthData() const noexcept;
+    static std::shared_ptr<User> CreateNewUser(boost::asio::io_service& io_service);
 
     User(boost::asio::io_service&& io_service);
     ~User();
 
-    const std::string GetUserAuthData() const noexcept;
-
-    static std::shared_ptr<User> CreateNewUser(boost::asio::io_service& io_service);
 };

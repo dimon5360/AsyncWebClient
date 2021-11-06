@@ -10,7 +10,6 @@
 class MessageBroker {
 
 public:
-    using message_t = std::pair<const uint64_t, const std::string>;
 
     /***********************************************************************************
      *  @brief  Push info about new message {msg} for user {connId} to queue
@@ -20,8 +19,8 @@ public:
      */
     void PushMessage(const uint64_t& connId, const std::string&& msg) {
         std::unique_lock lk(m_);
-        msgQueue.emplace(std::make_pair(connId, msg));
-        msgNum++;
+        //msgQueue.emplace(std::make_pair(connId, msg));
+        //msgNum++;
     }
 
     /***********************************************************************************
@@ -39,9 +38,9 @@ protected:
      *  @brief  Pull fisrt message from queue
      *  @return Message info
      */
-    const message_t PullMessage() {
+    const std::string PullMessage() {
         std::unique_lock lk(m_);
-        message_t msg{ msgQueue.front() };
+        std::string msg{ msgQueue.front() };
         msgQueue.pop();
         msgNum--;
         return msg;
@@ -49,7 +48,7 @@ protected:
 
 private:
     friend class User;
-    std::queue<message_t> msgQueue;
+    std::queue<std::string> msgQueue;
     std::shared_mutex m_;
     std::atomic_size_t msgNum;
 };

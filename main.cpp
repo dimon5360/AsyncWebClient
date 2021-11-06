@@ -11,8 +11,8 @@
 
 #include "conn/User.h"
 
-/* Build v.0.0.9 from 03.09.2021 */
-const uint32_t PATCH = 9;
+/* Build v.0.0.10 from 06.11.2021 */
+const uint32_t PATCH = 10;
 const uint32_t MINOR = 0;
 const uint32_t MAJOR = 0;
 

@@ -33,6 +33,7 @@ public:
     //Application(boost::asio::io_service& ios);
     //Application(std::shared_ptr<User> user);
     //~Application();
+
     
     static void InitializeApp(std::shared_ptr<User> user);
 };

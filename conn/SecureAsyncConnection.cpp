@@ -36,54 +36,31 @@
 #include "cryptopp/cryptlib.h"
 
 
-decltype(auto) SecureTcpConnection::SecureSession::CreateSession(const uint64_t& itselfUser, const uint64_t& secondUserId) {
-    return std::make_shared<SecureSession>(itselfUser, secondUserId);
-}
-
-const int32_t SecureTcpConnection::SecureSession::GetPublickKey() {
-    return public_key;
-}
-
-const std::string& SecureTcpConnection::SecureSession::PrepareSecureMessage(const std::string& message) {
-
-    return "";
-}
-
-bool SecureTcpConnection::SecureSession::IsSessionSecure() {
-    return bIsSessionSecure;
-}
-
-void SecureTcpConnection::SecureSession::CalcCommonSecret(const int32_t& A) {
-    dh->GenCommonSecret(A);
-    bIsSessionSecure = true;
-}
-
-SecureTcpConnection::SecureSession::SecureSession(const uint64_t& itselfUser, const uint64_t& secondUserId) :
-    session({ itselfUser, secondUserId })
-{
-    std::cout << "Start secure session\n";
-
-    /* construct random generator */
-    dh = std::make_unique<DH_Crypto>();
-    public_key = dh->GetPublicKey();
-}
-
-SecureTcpConnection::SecureSession::~SecureSession() {
-    std::cout << "Secure session closed\n";
-}
-
-
-
 void SecureTcpConnection::to_lower(std::string& str) {
     std::transform(str.begin(), str.end(), str.begin(), ::tolower);
 }
 
+void SecureTcpConnection::start_init()
+{
+    /* hello message to the server */
+    std::string msg{ hello_msg_header + info };
 
-/***********************************************************************************
-*  @brief  Callback-handler of async initialization process
-*  @param  error Boost system error object reference
-*  @return None
-*/
+    Logger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
+
+    socket_.async_write_some(boost::asio::buffer(msg),
+        [&](const boost::system::error_code& error,
+            std::size_t bytes_transferred) {
+                if (!error) {
+                    start_auth();
+                }
+                else {
+                    Logger::Write(boost::str(boost::format(
+                        "Failed initialization: %1%") % error.message()));
+                    Shutdown();
+                }
+        });
+}
+
 void SecureTcpConnection::handle_init(const boost::system::error_code& error)
 {
     if (!error) {
@@ -96,10 +73,6 @@ void SecureTcpConnection::handle_init(const boost::system::error_code& error)
     }
 }
 
-/***********************************************************************************
-*  @brief  Start process authentication of client
-*  @return None
-*/
 void SecureTcpConnection::start_auth()
 {
     socket_.async_read_some(boost::asio::buffer(buf),
@@ -108,123 +81,6 @@ void SecureTcpConnection::start_auth()
             boost::asio::placeholders::bytes_transferred));
 }
 
-#define CHAT 1
-
-const int32_t SecureTcpConnection::establish_session(const uint64_t& dstUserId) {
-    /* Create session between two defined users */
-    secSessions.emplace(dstUserId, SecureSession::CreateSession(id_, dstUserId));
-    return secSessions[dstUserId]->GetPublickKey();
-}
-
-void SecureTcpConnection::finish_establish_session() {
-    socket_.async_read_some(boost::asio::buffer(buf),
-        boost::bind(&SecureTcpConnection::handle_establish_secure, this,
-            boost::asio::placeholders::error,
-            boost::asio::placeholders::bytes_transferred));
-}
-
-void SecureTcpConnection::handle_establish_secure(const boost::system::error_code& error,
-    std::size_t bytes_transferred) {
-
-    std::cout << __func__ << std::endl;
-
-    if (!error) {
-        try {
-
-            std::string in_msg{ buf.data(), bytes_transferred };
-            Logger::Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
-
-            if (in_msg.substr(0, tech_msg_header.size()).compare(tech_msg_header) == 0) {
-
-                size_t ss = in_msg.find(",") - tech_msg_header.size();
-                std::string s = in_msg.substr(tech_msg_header.size(), ss);
-                auto dstUserId = boost::lexical_cast<uint64_t>(s.substr(0, s.find(":")));
-                auto srcUserId = boost::lexical_cast<uint64_t>(s.substr(s.find(":") + 1, s.size() - s.find(":")));
-
-                if (!secSessions.contains(dstUserId)) {
-                    /* if session is not started yet */
-                    std::cout << "Session with user #" << dstUserId << " is not started yet\n";
-                    int32_t pubKey = establish_session(dstUserId);
-                    auto key = in_msg.substr(in_msg.find(tech_pub_key_msg) + tech_pub_key_msg.size(), in_msg.size());
-                    std::cout << "In public key " << key << std::endl;
-                    std::cout << "Out public key " << pubKey << std::endl;
-                    secSessions[dstUserId]->CalcCommonSecret(boost::lexical_cast<int32_t>(key));
-                    SendPublicKey(srcUserId, dstUserId, pubKey);
-                }
-                else {
-                    /* if session is already started */
-                    std::cout << "Session with user #" << dstUserId << " is already started\n";
-                    auto key = in_msg.substr(in_msg.find(tech_pub_key_msg) + tech_pub_key_msg.size(), in_msg.size());
-                    secSessions[dstUserId]->CalcCommonSecret(boost::lexical_cast<int32_t>(key));
-                }
-            }
-            else {
-                std::cout << "Tech message header is incorrect\n";
-            }
-        }
-        catch (std::exception& ex) {
-            std::cout << ex.what() << std::endl;
-            return;
-        }
-
-        finish_establish_session();
-    }
-    else {
-        Shutdown();
-    }
-}
-
-void SecureTcpConnection::SendPublicKey(const uint64_t& srcUserId, const uint64_t& dstUserId, const int32_t& key) {
-
-    auto req = boost::str(boost::format("%1%%2%:%3%, %4%%5%")
-        % tech_msg_header % srcUserId % dstUserId % tech_pub_key_msg % key);
-
-    Logger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % req % req.size()));
-
-    socket_.async_write_some(boost::asio::buffer(req),
-        [&](const boost::system::error_code& error,
-            std::size_t bytes_transferred) {
-                std::cout << "Public key sended\n";
-        });
-}
-
-void SecureTcpConnection::handle_session(const uint64_t& dstUserId) {
-
-    if (dstUserId == id_) {
-        return;
-    }
-
-    if (!secSessions.contains(dstUserId)) {
-        int32_t pubKey = establish_session(dstUserId);
-        SendPublicKey(id_, dstUserId, pubKey);
-    }
-    else if (secSessions[dstUserId]->IsSessionSecure()) {
-
-        std::cout << "What do you want to write?\n";
-        std::string messsage;
-        std::getline(std::cin, messsage);
-
-        std::cout << messsage << std::endl;
-
-        std::string msg = boost::str(boost::format("%1%%2%:%3%, %3%%4%")
-            % tech_msg_header % id_ % dstUserId % tech_resp_msg % messsage);
-
-        Logger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
-
-        socket_.async_write_some(boost::asio::buffer(msg),
-            [&](const boost::system::error_code& error,
-                std::size_t bytes_transferred) {
-            });
-    }
-}
-
-
-/***********************************************************************************
-*  @brief  Callback-handler of async authentication process
-*  @param  error Boost system error object reference
-*  @param  recvBytes Amount of bytes received from connection
-*  @return None
-*/
 void SecureTcpConnection::handle_auth(const boost::system::error_code& error,
     std::size_t bytes_transferred)
 {
@@ -248,11 +104,6 @@ void SecureTcpConnection::handle_auth(const boost::system::error_code& error,
     }
 }
 
-/***********************************************************************************
-*  @brief  Start async reading process from socket
-*  @param  None
-*  @return None
-*/
 void SecureTcpConnection::start_read()
 {
     socket_.async_read_some(boost::asio::buffer(buf),
@@ -269,26 +120,19 @@ void SecureTcpConnection::start_read()
         });
 }
 
-/***********************************************************************************
-*  @brief  Start async writing process from socket
-*  @param  None
-*  @return None
-*/
-void SecureTcpConnection::start_write(MessageBroker::message_t&& msgData)
+void SecureTcpConnection::start_write(std::string && msg)
 {
-    std::string msg{ boost::str(boost::format("%1%") % msgData.second) };
-    //std::string msg{ boost::str(boost::format("%1%%2%, %3%%4%") % tech_msg_header % msgData.first % tech_resp_msg % msgData.second) };
     Logger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
 
     socket_.async_write_some(boost::asio::buffer(msg),
         [&](const boost::system::error_code& error,
             std::size_t bytes_transferred) {
-            if (error) {
-                Logger::Write(boost::str(boost::format(
-                    "Invalid hello message from user %1%: \"%2%\"\n") % id_ % error.message()));
-                Shutdown();
-            }
-        });  
+                if (error) {
+                    Logger::Write(boost::str(boost::format(
+                        "Invalid hello message from user %1%: \"%2%\"\n") % id_ % error.message()));
+                    Shutdown();
+                }
+        });
 }
 
 bool SecureTcpConnection::verify_certificate(bool preverified, boost::asio::ssl::verify_context& ctx)
@@ -304,34 +148,8 @@ bool SecureTcpConnection::verify_certificate(bool preverified, boost::asio::ssl:
     char subject_name[256];
     X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
     X509_NAME_oneline(X509_get_subject_name(cert), subject_name, 256);
-    //std::cout << "Verifying " << subject_name << "\n";
-
+    std::cout << "Verifying " << subject_name << "\n";
     return preverified;
-}
-
-/***********************************************************************************
-*  @brief  Start process initialization of client
-*  @return None
-*/
-void SecureTcpConnection::start_init()
-{
-    /* hello message to the server */
-    std::string msg{ hello_msg_header + info };
-
-    Logger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
-
-    socket_.async_write_some(boost::asio::buffer(msg),
-        [&](const boost::system::error_code& error,
-            std::size_t bytes_transferred) {
-            if (!error) {
-                start_auth();
-            }
-            else {
-                Logger::Write(boost::str(boost::format(
-                    "Failed initialization: %1%") % error.message()));
-                Shutdown();
-            }
-        });
 }
 
 void SecureTcpConnection::start_connect(const std::string& userInfo)
@@ -392,8 +210,6 @@ SecureTcpConnection::SecureTcpConnection(boost::asio::io_context& io_context, bo
 
         Logger::Write(boost::str(boost::format("Start connecting to %1%:%2% \n") % host % port));
         endpoints = resolver_.resolve(boost::asio::ip::tcp::v4(), host, port);
-
-        randGen = std::make_unique<RandomGen>();
     }
     catch (std::exception& ex) {
         std::cerr << "Connection failed: " << ex.what() << "\n";

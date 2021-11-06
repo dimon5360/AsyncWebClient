@@ -148,6 +148,7 @@
     <ClCompile Include="gui\App.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="test\test.cpp" />
+    <ClCompile Include="utils\json.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="conn\MessageBroker.h" />
@@ -157,6 +158,7 @@
     <ClInclude Include="crypto\rsa.h" />
     <ClInclude Include="gui\App.h" />
     <ClInclude Include="test\test.h" />
+    <ClInclude Include="utils\json.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
