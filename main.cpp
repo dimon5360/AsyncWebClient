@@ -26,8 +26,8 @@ int main() {
     return 0;
 #else 
     /* for corrent output boost error messages */
-    SetConsoleOutputCP(1251);
-    FileLogger::Write(boost::str(boost::format("Hello. Application version is %1%.%2%.%3%\n") % MAJOR % MINOR % PATCH));
+    // SetConsoleOutputCP(1251);
+    spdlog::info(boost::str(boost::format("Hello. Application version is %1%.%2%.%3%\n") % MAJOR % MINOR % PATCH));
 
     try
     {

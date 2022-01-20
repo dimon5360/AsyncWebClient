@@ -108,7 +108,7 @@ void JsonHandler::HandleRequest(std::string&& json, const json_req_t& type) noex
     }
 }
 
-boost::property_tree::ptree JsonHandler::ConstructTree(std::string&& jsonString) {
+boost::property_tree::ptree JsonHandler::ConstructTree(const std::string& jsonString) {
     namespace pt = boost::property_tree;
     pt::ptree ptree;
     boost::iostreams::array_source as(jsonString.data(), jsonString.size());
@@ -139,7 +139,7 @@ void JsonHandler::PrintTree(boost::property_tree::ptree& tree) {
 
 template<typename T>
 T JsonHandler::ParseJsonParam(const std::string& jsonReq, std::string&& sparam) {
-    auto tree = ConstructTree(std::move(jsonReq));
+    auto tree = ConstructTree(jsonReq);
     auto param = tree.get<T>(std::move(sparam));
     return param;
 }

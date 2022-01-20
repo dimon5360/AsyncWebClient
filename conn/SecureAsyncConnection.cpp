@@ -13,10 +13,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
-
-/* transform */
-
-/* random */
 #include <iomanip>
 #include <map>
 #include <cmath>
@@ -110,7 +106,7 @@ void SecureTcpConnection::start_read()
         [&](const boost::system::error_code& error,
             std::size_t bytes_transferred) { 
                 if (!error) {
-                    std::string_view in_msg{ buf.data(), bytes_transferred };
+                    std::string in_msg{ buf.data(), bytes_transferred };
                     Logger::Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
                     start_read();
                 } else {

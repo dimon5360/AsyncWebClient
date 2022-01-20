@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "string_view": "cpp",
+        "memory": "cpp",
+        "shared_mutex": "cpp",
+        "atomic": "cpp"
+    }
+}

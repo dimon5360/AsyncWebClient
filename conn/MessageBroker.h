@@ -6,6 +6,8 @@
 
 #include <shared_mutex>
 #include <queue>
+#include <memory>
+#include <atomic>
 
 class MessageBroker {
 

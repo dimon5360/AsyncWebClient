@@ -11,7 +11,7 @@
  /* boost C++ lib headers */
 #include <boost/property_tree/ptree.hpp>
 
-/* std Ñ++ lib headers */
+/* std ï¿½++ lib headers */
 #include <queue>
 #include <shared_mutex>
 
@@ -30,7 +30,7 @@ private:
     void HandleAuthJson(std::string&& authJson) noexcept;
 
 public:
-    boost::property_tree::ptree ConstructTree(std::string&& jsonString);
+    boost::property_tree::ptree ConstructTree(const std::string& jsonString);
 
     void PushRequest(std::string&& inReq) const noexcept;
     std::string PullRequest() const noexcept;
