@@ -5,11 +5,10 @@
  *  @date   16.08.2021
  */
 
-
-/* local C++ headers */
 #include "SecureAsyncConnection.h"
+#include "../format/json.h"
+#include "MessageBroker.h"
 
-/* std C++ lib headers */
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -24,23 +23,16 @@
 #include <boost/thread.hpp>
 #include <boost/lexical_cast.hpp>
 #include "boost/regex.hpp"
-
-#include "cryptopp/hex.h"
-#include "cryptopp/base64.h"
-#include "cryptopp/sha.h"
-#include "cryptopp/hmac.h"
-#include "cryptopp/cryptlib.h"
-
+#include <boost/property_tree/json_parser.hpp>
 
 void SecureTcpConnection::to_lower(std::string& str) {
     std::transform(str.begin(), str.end(), str.begin(), ::tolower);
 }
 
+// @brief Start exchange with server, send auth message
 void SecureTcpConnection::start_init()
 {
-    /* hello message to the server */
-    std::string msg{ hello_msg_header + info };
-
+    std::string msg{ jsonAuth };
     Logger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
 
     socket_.async_write_some(boost::asio::buffer(msg),
@@ -85,14 +77,10 @@ void SecureTcpConnection::handle_auth(const boost::system::error_code& error,
         std::string in_auth_msg{ buf.data(), bytes_transferred };
         Logger::Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_auth_msg % bytes_transferred));
 
-        /* support of different register */
         to_lower(in_auth_msg);
 
-        /* check that auth msg corresponds to default value */
-        if (in_auth_msg.substr(0, auth_msg.size()).compare(auth_msg) == 0) {
-            id_ = boost::lexical_cast<uint64_t>(in_auth_msg.substr(auth_msg.size()));
-            start_read();
-        }
+        messageBroker.PushMessage(std::move(in_auth_msg));
+        start_read();
     }
     else {
         Logger::Write(boost::str(boost::format("Failed authentication: %1%") % error.message()));
@@ -148,9 +136,9 @@ bool SecureTcpConnection::verify_certificate(bool preverified, boost::asio::ssl:
     return preverified;
 }
 
-void SecureTcpConnection::start_connect(const std::string& userInfo)
+void SecureTcpConnection::start_connect(std::string&& authConnectionjson)
 {
-    info = userInfo;
+    jsonAuth = authConnectionjson;
     boost::asio::async_connect(socket_.lowest_layer(), endpoints.begin(),
         [&](const boost::system::error_code& error, 
             boost::asio::ip::tcp::resolver::iterator it) {

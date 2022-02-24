@@ -7,11 +7,9 @@
 
 #pragma once
 
-/* local C++ headers ---------------------------------------- */
 #include "MessageBroker.h"
-#include "../utils/json.h"
+#include "../format/json.h"
 
-/* std C++ lib headers -------------------------------------- */
 #include <string>
 #include <memory>
 #include <queue>
@@ -20,10 +18,7 @@
 #include <shared_mutex>
 #include <set>
 
-/* external C++ libs headers -------------------------------- */
-/* spdlog C++ lib */
 #include <spdlog/spdlog.h>
-/* boost C++ lib */
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/array.hpp>
@@ -32,7 +27,6 @@ class Logger {
 
 public:
 
-    /* write log string */
     static void Write(std::string&& log) noexcept {
         spdlog::info(log);
     }
@@ -78,27 +72,30 @@ private:
     const std::string tech_req_msg{ "summ=" };
     const std::string tech_pub_key_msg{ "key=" };
 
-    /* unique id of client */
     user_id_t id_;
 
-    /* exchange data buffer */
     enum { max_length = 1024 };
     boost::array<char, max_length> buf = { { 0 } };
 
-    /* parameters of host and port to connect */
     const std::string host = "localhost";
     const std::string port = "4059";
-    std::string info;
+    std::string jsonAuth;
     mutable std::shared_mutex mutex_;
 
 
 public:
 
     void start_write(std::string&& msg);
-    void start_connect(const std::string& userInfo);
+    void start_connect(std::string&& userInfo);
     void Shutdown();
     void close(const boost::system::error_code& error);
 
     SecureTcpConnection(boost::asio::io_context& io_context, boost::asio::ssl::context& ssl_context);
     ~SecureTcpConnection();
+
+protected:
+
+    void SetId(const user_id_t& id) {
+        id_ = id;
+    }
 };

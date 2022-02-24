@@ -1,47 +1,24 @@
-/* std C++ lib headers */
-#include <iostream>
+#include "mainwindow.h"
+
+#include <QApplication>
 
 #include <spdlog/spdlog.h>
-
-/* boost C++ lib headers */
-#include <boost/asio.hpp>
-#include <boost/regex.hpp>
-#include <boost/asio/ssl.hpp>
 #include <boost/format.hpp>
-
-#include "conn/User.h"
+#include <memory>
 
 /* Build v.0.0.10 from 06.11.2021 */
 const uint32_t PATCH = 10;
 const uint32_t MINOR = 0;
 const uint32_t MAJOR = 0;
 
-#include "test/test.h"
+int main(int argc, char *argv[])
+{
+    std::string appHeader = boost::str(boost::format("SecureWebChat v.%1%.%2%.%3%") % MAJOR % MINOR % PATCH);
+    spdlog::info(boost::str(boost::format("Hello. Application %1%\n") % appHeader));
 
-int main() {
+    QApplication a(argc, argv);
 
-#if UNIT_TEST
-
-    init_unit_tests();
-    return 0;
-#else 
-    /* for corrent output boost error messages */
-    // SetConsoleOutputCP(1251);
-    spdlog::info(boost::str(boost::format("Hello. Application version is %1%.%2%.%3%\n") % MAJOR % MINOR % PATCH));
-
-    try
-    {
-        /* start tcp client */
-        boost::asio::io_service ios;
-        boost::asio::signal_set signals(ios, SIGINT);
-        User::CreateNewUser(std::ref(ios));
-        ios.run();
-    }
-    catch (std::exception &ex)
-    {
-        spdlog::error(boost::str(boost::format("Exception: %1%\n") % ex.what()));
-    }
-
-    return 0;
-#endif /* UNIT_TEST */
+    auto w = std::make_shared<MainWindow>(nullptr, appHeader);
+    w->show();
+    return a.exec();
 }
