@@ -11,7 +11,7 @@
 #define DEBUG_ENABLE
 
 
-class ConsoleLogger {
+class Logger {
 
     /* get time code */
     static uint64_t GetCurrTimeMs() noexcept;

@@ -6,6 +6,7 @@
  */
 
 #include "User.h"
+#include "../log/logger.h"
 
 #include <iostream>
 
@@ -20,6 +21,8 @@
 #include <boost/property_tree/json_parser.hpp>
 
 MessageBroker messageBroker;
+
+std::shared_ptr<User> User::user_ = nullptr;
 
 std::string User::SHA256(const std::string& msg)
 {
@@ -65,51 +68,73 @@ void User::SendMessageToUser(SecureTcpConnection::user_id_t id, std::string&& ms
     conn->start_write(std::move(inifile_text));
 }
 
+#include <boost/coroutine2/all.hpp>
+
+bool User::ProcessAuthResponse() const noexcept {
+
+//    using namespace boost::coroutines;
+//    coroutine<void>::pull_type source{[&](){
+
+//                                      }};
+    std::future<bool> f = std::async(std::launch::async, [&]{
+        while(messageBroker.IsQueueEmpty()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        std::string json = messageBroker.PullMessage();
+        return dataProcessor->ProcessAuthResponse(std::move(json));
+    });
+    bool res = f.get();
+
+    std::cout << res << std::endl;
+    if(!res) {
+        conn->close(boost::system::error_code());
+    } else {
+        Logger::Debug("User authentication succeed.");
+    }
+    return res;
+}
+
 void User::StartInitialization() {
     conn->start_connect(std::move(GetUserAuthData()));
 }
 
 std::string User::GetUserAuthData() const noexcept {
-    return dataProcessor->PrepareAuthData(boost::str(boost::format("{%1%,%2%}") % username_ % password_));
+    return dataProcessor->PrepareAuthRequest(boost::str(boost::format("{%1%,%2%}") % username_ % password_));
 }
 
-std::shared_ptr<User> User::CreateNewUser(boost::asio::io_service& io_service, std::string&& login, std::string&& password) {
+const std::shared_ptr<User>& User::GetInstance() {
+    return user_;
+}
+
+std::shared_ptr<User> User::CreateUser(boost::asio::io_service& io_service, std::string&& login, std::string&& password) {
     try {
-        return std::make_shared<User>(std::move(io_service), std::move(login), std::move(password));
+        if(!user_) {
+            user_ = std::make_shared<User>(std::move(io_service), std::move(login), std::move(password));
+        }
     }
     catch (std::exception& ex) {
-        Logger::Write(boost::str(boost::format("CreateNewUser exception: %1%\n") % ex.what()));
+        Logger::Error(boost::str(boost::format("CreateNewUser exception: %1%\n") % ex.what()));
     }
-    return nullptr;
+    return user_;
 }
 
 void User::UserStart() {
     StartInitialization();
     io_service.run();
-    std::cout << "Construct User class\n";
 }
 
+#include <thread>
+#include <future>
+
 User::User(boost::asio::io_service&& io_service_, std::string&& login, std::string&& password) :
-    io_service(io_service_),
-    ssl_context(boost::asio::ssl::context::tlsv13),
-    username_(std::move(login)),
-    password_(std::move(password))
+    io_service(io_service_), ssl_context(boost::asio::ssl::context::tlsv13),
+    username_(std::move(login)), password_(std::move(password))
 {
+    std::cout << "Construct User class\n";
     ssl_context.load_verify_file("rootca.crt");
 
     conn = std::make_shared<SecureTcpConnection>(io_service_, ssl_context);
-    dataProcessor = std::make_unique<DataProcessor>();
-
-    std::thread([&](){
-        while(true) {
-            if(!messageBroker.IsQueueEmpty()) {
-                std::string json = messageBroker.PullMessage();
-                // TODO: DataProcessor must handle message and to check approving authentication
-
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        }
-    }).detach();
+    dataProcessor = DataProcessor::CreateProcessor();
 }
 
 User::~User() {

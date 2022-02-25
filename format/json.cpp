@@ -31,6 +31,8 @@ std::string JsonHandler::msg_hash_token{ "message_hash" };
 std::string JsonHandler::users_amount_token{ "users_amount" };
 std::string JsonHandler::users_list_token{ "users_list" };
 
+std::string JsonHandler::auth_status_token{ "auth_status" };
+
 /* structure of users list response message
 {
     "message_identifier" : users_list_message // details (JsonHandler::json_req_t)

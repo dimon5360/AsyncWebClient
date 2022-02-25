@@ -16,23 +16,22 @@
 
 #include "logger.h"
 
-uint64_t ConsoleLogger::GetCurrTimeMs() noexcept {
+uint64_t Logger::GetCurrTimeMs() noexcept {
     const auto systick_now = std::chrono::system_clock::now();
     const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(systick_now.time_since_epoch());
     return nowMs.count();
 }
 
-void ConsoleLogger::Info(const std::string&& log) noexcept {
-
+void Logger::Info(const std::string&& log) noexcept {
     spdlog::info(log);
 }
 
-void ConsoleLogger::Debug(const std::string&& log) noexcept {
+void Logger::Debug(const std::string&& log) noexcept {
 #ifdef DEBUG_ENABLE
     spdlog::info(log);
 #endif /* DEBUG_ENABLE */
 }
 
-void ConsoleLogger::Error(const std::string&& log) noexcept {
+void Logger::Error(const std::string&& log) noexcept {
     spdlog::error(log);
 }

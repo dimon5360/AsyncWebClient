@@ -3,7 +3,6 @@
  *  @brief      JSON handler class declaration
  *  @author     Kalmykov Dmitry
  *  @date       19.08.2021
- *  @modified   03.09.2021
  *  @version    0.2
  */
 #pragma once
@@ -23,10 +22,6 @@ public:
         user_message,
         group_users_message,
     };
-
-    static std::string usersListJsonHeader;
-    static std::string users_amount_token;
-    static std::string users_list_token;
     
     static std::string msg_identificator_token;
     static std::string dst_user_msg_token;
@@ -34,6 +29,11 @@ public:
     static std::string user_msg_token;
     static std::string msg_timestamp_token;
     static std::string msg_hash_token;  
+
+    static std::string users_amount_token;
+    static std::string users_list_token;
+
+    static std::string auth_status_token;
 
 public:
     boost::property_tree::ptree ConstructTreeFromJson(const std::string& jsonString);

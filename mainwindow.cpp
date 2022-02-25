@@ -48,7 +48,7 @@ void MainWindow::SignInBtnCallback() {
         try
         {
             boost::asio::io_service ios;
-            auto user = User::CreateNewUser(std::ref(ios), std::move(login.toStdString()), std::move(password.toStdString()));
+            auto user = User::CreateUser(std::ref(ios), std::move(login.toStdString()), std::move(password.toStdString()));
             user->UserStart();
             ios.run();
         }
@@ -57,4 +57,6 @@ void MainWindow::SignInBtnCallback() {
             qDebug() << "Exception: " << ex.what();
         }
      }).detach();
+
+    // TODO: exit from handler, redraw the window, process tcp connection
 }

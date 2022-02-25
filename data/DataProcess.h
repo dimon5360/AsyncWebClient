@@ -6,15 +6,27 @@
 
 #include "../format/json.h"
 
+#include <boost/property_tree/json_parser.hpp>
 
 class DataProcessor {
 
     std::unique_ptr<JsonHandler> jsonHandler;
+    static std::shared_ptr<DataProcessor> dp_;
+
+    // remove copy constructor and copy assignment operator
+    DataProcessor(const DataProcessor& copy) = delete;
+    DataProcessor& operator=(const DataProcessor& copy) = delete;
 
 public:
 
-    void ParseJsonMessage(std::string && message);
-    std::string PrepareAuthData(std::string&& authData);
-
     DataProcessor();
+
+    static std::shared_ptr<DataProcessor> CreateProcessor();
+    static const std::shared_ptr<DataProcessor>& GetInstance();
+
+    void ParseJsonMessage(std::string && message) const noexcept;
+    std::string PrepareAuthRequest(std::string && authData) const noexcept;
+    bool ProcessAuthResponse(std::string && sjson) const noexcept;
+
+    ~DataProcessor();
 };

@@ -6,8 +6,11 @@
  */
 
 #include "SecureAsyncConnection.h"
-#include "../format/json.h"
 #include "MessageBroker.h"
+#include "User.h"
+
+#include "../format/json.h"
+#include "../log/logger.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -33,16 +36,15 @@ void SecureTcpConnection::to_lower(std::string& str) {
 void SecureTcpConnection::start_init()
 {
     std::string msg{ jsonAuth };
-    Logger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
+    Logger::Debug(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
 
     socket_.async_write_some(boost::asio::buffer(msg),
         [&](const boost::system::error_code& error,
             std::size_t bytes_transferred) {
                 if (!error) {
                     start_auth();
-                }
-                else {
-                    Logger::Write(boost::str(boost::format(
+                } else {
+                    Logger::Error(boost::str(boost::format(
                         "Failed initialization: %1%") % error.message()));
                     Shutdown();
                 }
@@ -55,7 +57,7 @@ void SecureTcpConnection::handle_init(const boost::system::error_code& error)
         start_auth();
     }
     else {
-        Logger::Write(boost::str(boost::format(
+        Logger::Error(boost::str(boost::format(
             "HandleInit error user: %1% \"%2%\"\n") % id_ % error.message()));
         Shutdown();
     }
@@ -75,15 +77,18 @@ void SecureTcpConnection::handle_auth(const boost::system::error_code& error,
     if (!error) {
 
         std::string in_auth_msg{ buf.data(), bytes_transferred };
-        Logger::Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_auth_msg % bytes_transferred));
+        Logger::Debug(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_auth_msg % bytes_transferred));
 
         to_lower(in_auth_msg);
 
         messageBroker.PushMessage(std::move(in_auth_msg));
-        start_read();
+//        User::GetInstance()->ProcessAuthResponse();
+//        if(User::GetInstance()->ProcessAuthResponse()) {
+            start_read();
+//        }
     }
     else {
-        Logger::Write(boost::str(boost::format("Failed authentication: %1%") % error.message()));
+        Logger::Error(boost::str(boost::format("Failed authentication: %1%") % error.message()));
         Shutdown();
     }
 }
@@ -95,10 +100,10 @@ void SecureTcpConnection::start_read()
             std::size_t bytes_transferred) { 
                 if (!error) {
                     std::string in_msg{ buf.data(), bytes_transferred };
-                    Logger::Write(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
+                    Logger::Debug(boost::str(boost::format("<< \"%1%\" [%2%]\n") % in_msg % bytes_transferred));
                     start_read();
                 } else {
-                    Logger::Write(boost::str(boost::format( "Failed reading: %1%") % error.message()));
+                    Logger::Error(boost::str(boost::format( "Failed reading: %1%") % error.message()));
                     Shutdown();
                 }
         });
@@ -106,13 +111,13 @@ void SecureTcpConnection::start_read()
 
 void SecureTcpConnection::start_write(std::string && msg)
 {
-    Logger::Write(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
+    Logger::Debug(boost::str(boost::format(">> \"%1%\" [%2%]\n") % msg % msg.size()));
 
     socket_.async_write_some(boost::asio::buffer(msg),
         [&](const boost::system::error_code& error,
             std::size_t bytes_transferred) {
                 if (error) {
-                    Logger::Write(boost::str(boost::format(
+                    Logger::Error(boost::str(boost::format(
                         "Invalid hello message from user %1%: \"%2%\"\n") % id_ % error.message()));
                     Shutdown();
                 }
@@ -167,16 +172,11 @@ void SecureTcpConnection::Shutdown() {
     socket_.async_shutdown([&](const boost::system::error_code& error) {
         std::cout << "Handle of shutdown" << std::endl;
         close(error);
-        });
+    });
 }
 
-/***********************************************************************************
-*  @brief  Close connection and call the desctructor
-*  @param  error Boost system error object reference
-*  @return None
-*/
 void SecureTcpConnection::close(const boost::system::error_code& error) {
-    Logger::Write(boost::str(boost::format("Close connection error: %2% \n") % id_ % error.message()));
+    Logger::Error(boost::str(boost::format("Close connection error: %2% \n") % id_ % error.message()));
 
     socket_.next_layer().close(); // so is in server side
     //socket_.lowest_layer().close(); // so was in client
@@ -186,13 +186,13 @@ SecureTcpConnection::SecureTcpConnection(boost::asio::io_context& io_context, bo
     : socket_(io_context, ssl_context),
     resolver_(io_context)
 {
-    std::cout << "SecureTcpConnection constructor.\n";
+    std::cout << "Construct SecureTcpConnection class.\n";
     try {
         socket_.set_verify_mode(boost::asio::ssl::verify_peer);
         socket_.set_verify_callback(boost::bind(&SecureTcpConnection::verify_certificate, this,
             boost::placeholders::_1, boost::placeholders::_2));
 
-        Logger::Write(boost::str(boost::format("Start connecting to %1%:%2% \n") % host % port));
+        Logger::Debug(boost::str(boost::format("Start connecting to %1%:%2% \n") % host % port));
         endpoints = resolver_.resolve(boost::asio::ip::tcp::v4(), host, port);
     }
     catch (std::exception& ex) {
@@ -201,5 +201,5 @@ SecureTcpConnection::SecureTcpConnection(boost::asio::io_context& io_context, bo
 }
 
 SecureTcpConnection::~SecureTcpConnection() {
-    std::cout << "SecureTcpConnection destructor.\n";
+    Logger::Debug("Destruct SecureTcpConnection class.");
 }

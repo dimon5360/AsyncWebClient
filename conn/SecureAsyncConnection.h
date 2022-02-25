@@ -23,17 +23,9 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/array.hpp>
 
-class Logger {
-
-public:
-
-    static void Write(std::string&& log) noexcept {
-        spdlog::info(log);
-    }
-};
-
 class SecureTcpConnection {
 
+    friend class User;
 public:
 
     using user_id_t = uint32_t;
@@ -82,7 +74,6 @@ private:
     std::string jsonAuth;
     mutable std::shared_mutex mutex_;
 
-
 public:
 
     void start_write(std::string&& msg);
@@ -95,6 +86,7 @@ public:
 
 protected:
 
+    std::condition_variable cv;
     void SetId(const user_id_t& id) {
         id_ = id;
     }

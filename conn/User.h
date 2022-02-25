@@ -21,7 +21,7 @@ class User {
     friend class SecureTcpConnection;
 
 private:
-    /* to keep msg between App GUI and TCP connection handler */
+
     std::unique_ptr<MessageBroker> msgBroker;
 
     std::string username_{}, password_{};
@@ -34,16 +34,34 @@ private:
     std::shared_ptr<SecureTcpConnection> conn;
     boost::asio::ssl::context ssl_context;
     boost::asio::io_service& io_service;
-    std::unique_ptr<DataProcessor> dataProcessor;
+    std::shared_ptr<DataProcessor> dataProcessor;
+
+    static std::shared_ptr<User> user_;
+
+    // remove copy constructor and copy assignment operator
+    User(const User& copiedUser) = delete;
+    User& operator=(const User& copiedUser) = delete;
+    // to avoid creating another one instances
+    User();
 
     void StartInitialization();
 
 public:
-    void UserStart();
-    void SendMessageToUser(SecureTcpConnection::user_id_t dstUsetId, std::string&& msg);
-    std::string GetUserAuthData() const noexcept;
-    static std::shared_ptr<User> CreateNewUser(boost::asio::io_service& io_service, std::string&& login, std::string&& password_);
 
+    void SetUserId(const SecureTcpConnection::user_id_t& id_) {
+        conn->SetId(id_);
+    }
+
+    std::string GetUserAuthData() const noexcept;
+    void SendMessageToUser(SecureTcpConnection::user_id_t dstUsetId, std::string&& msg);
+
+    bool ProcessAuthResponse() const noexcept;
+
+    void UserStart();
+
+    static const std::shared_ptr<User>& GetInstance();
+    static std::shared_ptr<User> CreateUser(boost::asio::io_service& io_service,
+                                            std::string&& login, std::string&& password_);
     User(boost::asio::io_service&& io_service, std::string&& login, std::string&& password);
     ~User();
 };
