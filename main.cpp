@@ -6,8 +6,8 @@
 #include <boost/format.hpp>
 #include <memory>
 
-/* Build v.0.0.10 from 06.11.2021 */
-const uint32_t PATCH = 10;
+/* Build v.0.0.11 from 28.02.2022 */
+const uint32_t PATCH = 11;
 const uint32_t MINOR = 0;
 const uint32_t MAJOR = 0;
 

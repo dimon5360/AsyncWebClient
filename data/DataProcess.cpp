@@ -52,9 +52,9 @@ bool DataProcessor::ProcessAuthResponse(std::string && sjson) const noexcept {
 
     try {
         std::string authStatus = tree.get<std::string>(JsonHandler::auth_status_token);
-        if(authStatus.compare(authStatucApproved)) {
+        if(!authStatus.compare(authStatucApproved)) {
             spdlog::info("Authentication approved.");
-        } else if(authStatus.compare(authStatucDenied)) {
+        } else if(!authStatus.compare(authStatucDenied)) {
             spdlog::error("Authentication denied.");
             return isUserAuthenticated;
         } else {

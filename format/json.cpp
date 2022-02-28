@@ -33,9 +33,19 @@ std::string JsonHandler::users_list_token{ "users_list" };
 
 std::string JsonHandler::auth_status_token{ "auth_status" };
 
+/* structure of users list request message
+{
+    "message_identifier" : users_list_message // details (JsonHandler::json_req_t)
+    "src_user_id" : async connection ID
+    "message_timestamp" : system datetime
+    "message_hash" : sha512 | sha256
+}
+*/
+
 /* structure of users list response message
 {
     "message_identifier" : users_list_message // details (JsonHandler::json_req_t)
+    "dst_user_id" : async connection ID
     "users_amount" : 1 ... N, // size of comtainer in UsersPool class (size_t)
     "users_list" : [ "user1_id", "user2_id", ... "userN_id" ],
 }

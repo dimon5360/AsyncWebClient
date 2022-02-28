@@ -76,21 +76,28 @@ bool User::ProcessAuthResponse() const noexcept {
 //    coroutine<void>::pull_type source{[&](){
 
 //                                      }};
-    std::future<bool> f = std::async(std::launch::async, [&]{
-        while(messageBroker.IsQueueEmpty()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
-        std::string json = messageBroker.PullMessage();
-        return dataProcessor->ProcessAuthResponse(std::move(json));
-    });
-    bool res = f.get();
+    bool res = false;
+    try {
+        std::future<bool> f = std::async(std::launch::async, [&]{
+            while(messageBroker.IsQueueEmpty()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            std::string json = messageBroker.PullMessage();
+            return dataProcessor->ProcessAuthResponse(std::move(json));
+        });
 
-    std::cout << res << std::endl;
-    if(!res) {
-        conn->close(boost::system::error_code());
-    } else {
-        Logger::Debug("User authentication succeed.");
+        std::cout << "wait future result\n";
+        res = f.get();
+
+        if(!res) {
+            conn->close(boost::system::error_code());
+        } else {
+            Logger::Debug("User authentication succeed.");
+        }
+    } catch (std::exception &ex) {
+        spdlog::error(boost::str(boost::format("%1 %2%") % "ProcessAuthResponse error: " % ex.what()));
     }
+
     return res;
 }
 

@@ -17,6 +17,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <set>
+#include <iostream>
 
 #include <spdlog/spdlog.h>
 #include <boost/asio.hpp>
@@ -47,22 +48,11 @@ private:
     void start_read();
     bool verify_certificate(bool preverified, boost::asio::ssl::verify_context& ctx);
 
-
-    /* alias for ssl stream to tcp socket */
     using ssl_socket = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>;
-    /* cliet boost ssl socket object */
     ssl_socket socket_;
 
     boost::asio::ip::tcp::resolver resolver_;
     boost::asio::ip::tcp::resolver::results_type endpoints;
-
-    /* msgs headers to exchange with clients */
-    const std::string auth_msg{ "hello user id=" };
-    const std::string hello_msg_header{ "hello server" };
-    const std::string tech_msg_header{ "user id=" };
-    const std::string tech_resp_msg{ "message=" };
-    const std::string tech_req_msg{ "summ=" };
-    const std::string tech_pub_key_msg{ "key=" };
 
     user_id_t id_;
 

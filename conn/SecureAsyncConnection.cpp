@@ -82,10 +82,8 @@ void SecureTcpConnection::handle_auth(const boost::system::error_code& error,
         to_lower(in_auth_msg);
 
         messageBroker.PushMessage(std::move(in_auth_msg));
-//        User::GetInstance()->ProcessAuthResponse();
-//        if(User::GetInstance()->ProcessAuthResponse()) {
-            start_read();
-//        }
+        User::GetInstance()->ProcessAuthResponse();
+        start_read();
     }
     else {
         Logger::Error(boost::str(boost::format("Failed authentication: %1%") % error.message()));
