@@ -1,4 +1,6 @@
+/.vscode/
 /.vs/
+/.cmake/
 /x64/
 /api/
 /build/
@@ -8,5 +10,6 @@
 *.csr
 *.pem
 *.srl
+*.user
 
 *.log

@@ -1,8 +1,8 @@
 
 
 #include "DataProcess.h"
-#include "../conn/SecureAsyncConnection.h"
-#include "../conn/User.h"
+#include "../core/SecureAsyncConnection.h"
+#include "../core/AppCore.h"
 
 #include <boost/lexical_cast.hpp>
 #include <boost/format.hpp>
@@ -20,8 +20,22 @@ std::shared_ptr<DataProcessor> DataProcessor::CreateProcessor() {
     }
     return dp_;
 }
+
 const std::shared_ptr<DataProcessor>& DataProcessor::GetInstance() {
     return dp_;
+}
+
+std::string DataProcessor::PrepareUserMessage(std::string&& userMsg, const uint32_t from, 
+            const uint32_t to) const noexcept {
+    try {
+        auto tree = jsonHandler->ConstructTree(JsonHandler::json_req_t::user_message, std::move(userMsg));
+        tree.put(JsonHandler::src_user_msg_token, from);
+        tree.put(JsonHandler::dst_user_msg_token, to);
+        return jsonHandler->ConvertToString(tree);
+    } catch(std::exception &ex) {
+        spdlog::error(boost::str(boost::format("%1% %2") % "Prepate user message error: " % ex.what()));
+    }
+    return {};
 }
 
 std::string DataProcessor::PrepareAuthRequest(std::string&& authData) const noexcept {
@@ -63,7 +77,7 @@ bool DataProcessor::ProcessAuthResponse(std::string && sjson) const noexcept {
         }
         isUserAuthenticated = true;
         auto ownId = boost::lexical_cast<SecureTcpConnection::user_id_t>(tree.get<std::string>(JsonHandler::dst_user_msg_token));
-        User::GetInstance()->SetUserId(ownId);
+        AppCore::GetInstance()->SetUserId(ownId);
 
     } catch(std::exception &ex) {
         spdlog::error(boost::str(boost::format("%1% %2") % "Parse JSON message error: " % ex.what()));

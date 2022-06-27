@@ -8,7 +8,7 @@
 
  /* local C++ headers */
 #include "test.h"
-#include "../conn/User.h"
+#include "../core/AppCore.h"
 
 /* std C++ lib headers */
 #include <memory>
